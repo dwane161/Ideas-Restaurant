@@ -1,0 +1,7 @@
+{
+  "name": "Ideas Restaurant",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
