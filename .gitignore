@@ -31,8 +31,17 @@ log.txt
 
 # Node
 /node_modules
+**/node_modules/
 npm-debug.log
 yarn-error.log
+
+# Build output (monorepo)
+**/dist/
+
+# Env / DB
+.env
+**/.env
+*.db
 
 # IDEs and editors
 .idea/

@@ -1,0 +1,88 @@
+<ion-header class="invoice-header" [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tabs/tab1"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Factura • {{ tableLabel }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="invoice-page" [fullscreen]="true">
+  <div class="container">
+    <ng-container *ngIf="invoice() as inv; else notFound">
+      <section class="panel">
+        <header class="panel-head">
+          <div class="panel-title">Resumen</div>
+          <div class="panel-subtitle">
+            {{ inv.createdAtIso | date: 'medium' }}
+          </div>
+        </header>
+
+        <div class="row">
+          <span class="label">Total</span>
+          <span class="value">${{ inv.total | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="panel-title small">Pago por cuentas</div>
+        <div class="splits">
+          <div *ngFor="let s of inv.splits" class="split-row">
+            <div class="split-left">
+              <div class="split-name">{{ s.accountName }}</div>
+              <div *ngIf="inv.method === 'percentage' && s.percent != null" class="split-meta">
+                {{ s.percent | number:'1.0-2' }}%
+              </div>
+            </div>
+            <div class="split-amount">
+              ${{ s.amount | number:'1.2-2' }}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">Detalle</div>
+        <div class="accounts">
+          <article *ngFor="let account of inv.order.accounts" class="account-card">
+            <header class="account-head">
+              <div class="account-name">{{ account.name }}</div>
+              <div class="account-total">
+                ${{ accountTotal(account.items) | number:'1.2-2' }}
+              </div>
+            </header>
+
+            <div class="items">
+              <div *ngIf="account.items.length === 0" class="empty-items">
+                Sin productos.
+              </div>
+
+              <div *ngFor="let item of account.items" class="item-row">
+                <div class="item-left">
+                  <div class="item-name">{{ item.name }}</div>
+                  <div class="item-meta">
+                    {{ item.qty }} × ${{ item.unitPrice | number:'1.2-2' }}
+                  </div>
+                </div>
+                <div class="item-line">
+                  ${{ (item.qty * item.unitPrice) | number:'1.2-2' }}
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <button type="button" class="primary-btn" (click)="close()">
+        Finalizar
+      </button>
+    </ng-container>
+
+    <ng-template #notFound>
+      <div class="empty-state">
+        No hay factura para esta mesa.
+      </div>
+      <button type="button" class="ghost-btn" (click)="close()">Volver</button>
+    </ng-template>
+  </div>
+</ion-content>

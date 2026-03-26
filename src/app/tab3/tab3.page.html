@@ -1,17 +1,56 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title>
-      Tab 3
-    </ion-title>
+    <ion-title>Configuración</ion-title>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Tab 3</ion-title>
-    </ion-toolbar>
-  </ion-header>
+<ion-content [fullscreen]="true" class="settings-page">
+  <div class="container">
+    <section class="card">
+      <div class="card-title">Perfil</div>
+      <div class="row" *ngIf="user() as u; else noUser">
+        <div class="label">Usuario</div>
+        <div class="value">{{ u.name }} ({{ u.id }})</div>
+      </div>
+      <ng-template #noUser>
+        <div class="row">
+          <div class="label">Usuario</div>
+          <div class="value">—</div>
+        </div>
+      </ng-template>
+    </section>
 
-  <app-explore-container name="Tab 3 page"></app-explore-container>
+    <section class="card">
+      <div class="card-title">Conectividad</div>
+      <div class="row">
+        <div class="label">API</div>
+        <div class="value mono">{{ apiBaseUrl }}</div>
+      </div>
+      <div class="row">
+        <div class="label">Estado API</div>
+        <div class="value">{{ apiStatus() }}</div>
+      </div>
+      <div class="row">
+        <div class="label">Estado BD</div>
+        <div class="value">{{ dbStatus() }}</div>
+      </div>
+
+      <ion-button expand="block" fill="outline" [disabled]="isTesting()" (click)="testConnections()">
+        Probar conexión
+      </ion-button>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Dashboard</div>
+      <ion-button expand="block" fill="outline" (click)="refreshDashboard()">
+        Actualizar órdenes
+      </ion-button>
+    </section>
+  </div>
 </ion-content>
+
+<ion-footer class="footer">
+  <ion-toolbar>
+    <ion-button expand="block" color="danger" (click)="logout()">Cerrar sesión</ion-button>
+  </ion-toolbar>
+</ion-footer>

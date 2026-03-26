@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B4F52"/>
+      <stop offset="1" stop-color="#063437"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 240) rotate(35) scale(520 380)">
+      <stop stop-color="white" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="white" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="white" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <rect width="1200" height="800" fill="url(#glow)"/>
+
+  <g opacity="0.95">
+    <ellipse cx="600" cy="420" rx="340" ry="240" fill="url(#plate)"/>
+    <ellipse cx="600" cy="420" rx="300" ry="210" fill="white" fill-opacity="0.18"/>
+    <ellipse cx="600" cy="420" rx="220" ry="150" fill="white" fill-opacity="0.10"/>
+  </g>
+
+  <g opacity="0.9">
+    <path d="M520 570c0-44 36-80 80-80h0c44 0 80 36 80 80" stroke="white" stroke-opacity="0.65" stroke-width="18" stroke-linecap="round"/>
+    <circle cx="560" cy="520" r="14" fill="white" fill-opacity="0.55"/>
+    <circle cx="640" cy="520" r="14" fill="white" fill-opacity="0.55"/>
+  </g>
+
+  <text x="50%" y="120" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-size="40" font-weight="800" fill="white" fill-opacity="0.75">
+    Ideas Restaurant
+  </text>
+  <text x="50%" y="172" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-size="20" font-weight="600" fill="white" fill-opacity="0.55">
+    Imagen no disponible
+  </text>
+</svg>
+

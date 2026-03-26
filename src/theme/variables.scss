@@ -1,2 +1,65 @@
-// For information on how to create your own theme, please refer to:
-// https://ionicframework.com/docs/theming/
+:root {
+
+  /** 🟢 PRIMARY **/
+  --color-primary: #006064;
+  --color-primary-rgb: 0, 96, 100;
+  --color-primary-contrast: #ffffff;
+  --color-primary-shade: #004d50;
+  --color-primary-tint: #1a7377;
+
+  /** 🟠 SECONDARY **/
+  --color-secondary: #E65100;
+  --color-secondary-rgb: 230, 81, 0;
+  --color-secondary-contrast: #ffffff;
+  --color-secondary-shade: #cc4800;
+  --color-secondary-tint: #eb6a1a;
+
+  /** ⚫ TERTIARY **/
+  --color-tertiary: #263238;
+  --color-tertiary-rgb: 38, 50, 56;
+  --color-tertiary-contrast: #ffffff;
+  --color-tertiary-shade: #1e272c;
+  --color-tertiary-tint: #3c474c;
+
+  /** ⚪ NEUTRAL **/
+  --color-neutral: #747878;
+  --color-neutral-rgb: 116, 120, 120;
+
+  /** 🧱 SEMÁNTICOS (LIGHT UI) **/
+  --color-background: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f2f2;
+
+  --color-text-primary: #263238;
+  --color-text-secondary: #747878;
+
+  --color-border: #e0e0e0;
+
+  /** 🌫️ STATES **/
+  --color-hover: rgba(0, 0, 0, 0.04);
+  --color-active: rgba(0, 0, 0, 0.08);
+
+}
+
+:root {
+
+  --ion-color-primary: var(--color-primary);
+  --ion-color-primary-rgb: var(--color-primary-rgb);
+  --ion-color-primary-contrast: var(--color-primary-contrast);
+  --ion-color-primary-shade: var(--color-primary-shade);
+  --ion-color-primary-tint: var(--color-primary-tint);
+
+  --ion-color-secondary: var(--color-secondary);
+  --ion-color-secondary-rgb: var(--color-secondary-rgb);
+  --ion-color-secondary-contrast: var(--color-secondary-contrast);
+  --ion-color-secondary-shade: var(--color-secondary-shade);
+  --ion-color-secondary-tint: var(--color-secondary-tint);
+
+  --ion-color-tertiary: var(--color-tertiary);
+  --ion-color-tertiary-rgb: var(--color-tertiary-rgb);
+  --ion-color-tertiary-contrast: var(--color-tertiary-contrast);
+
+  --ion-background-color: var(--color-background);
+  --ion-text-color: var(--color-text-primary);
+
+}

@@ -1,0 +1,52 @@
+<ion-content class="pin-page">
+
+  <div class="pin-wrapper">
+
+    <div class="pin-card">
+
+      <!-- Header -->
+      <div class="pin-header">
+        <div class="logo">🍽️</div>
+        <h1>Ideas Restaurant Solution</h1>
+        <p class="subtitle">ACCESO AL PORTAL DE SERVICIO</p>
+      </div>
+
+      <!-- PIN -->
+      <div class="pin-display">
+        <p>Ingrese el PIN del personal</p>
+
+        <div class="dots">
+          @for (d of dots; track $index; let i = $index) {
+            <span class="dot" [class.filled]="i < pin().length"></span>
+          }
+        </div>
+
+        @if (errorMessage()) {
+          <p class="error">{{ errorMessage() }}</p>
+        }
+      </div>
+
+      <!-- Keypad -->
+      <div class="keypad">
+        @for (key of keys; track key.value ?? key.action) {
+          <button (click)="onKeyPress(key)">
+            {{ key.label }}
+          </button>
+        }
+      </div>
+
+      <!-- CTA -->
+      <ion-button expand="block" class="cta" (click)="submit()">
+        Ingresar
+      </ion-button>
+
+      <!-- Footer -->
+      <div class="pin-footer">
+        <span>¿Olvidó su PIN?</span>
+      </div>
+
+    </div>
+
+  </div>
+
+</ion-content>

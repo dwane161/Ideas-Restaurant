@@ -1,0 +1,234 @@
+<ion-header class="detail-header" [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tabs/tab1"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ tableLabel }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="detail-page" [fullscreen]="true">
+  <div class="container">
+    <ng-container *ngIf="table() as t; else notFound">
+      <section class="status-row">
+        <div
+          class="status-pill"
+          [class.available]="t.status === 'available'"
+          [class.occupied]="t.status === 'occupied'"
+          [class.pending]="t.status === 'pending'"
+          [class.cleaning]="t.status === 'cleaning'"
+        >
+          {{
+            t.status === 'available'
+              ? 'DISPONIBLE'
+              : t.status === 'occupied'
+                ? 'OCUPADA'
+                : t.status === 'pending'
+                  ? 'PAGADO'
+                  : 'LIMPIANDO'
+          }}
+        </div>
+        <div class="meta">
+          <span>{{ t.seats }} asientos</span>
+          <span *ngIf="t.elapsed">• {{ t.elapsed }} transcurrido</span>
+        </div>
+      </section>
+
+      <!-- AVAILABLE -->
+      <section *ngIf="t.status === 'available'" class="panel">
+        <h2 class="panel-title">Abrir mesa</h2>
+        <p class="panel-subtitle">
+          Selecciona cómo se manejará el pago.
+        </p>
+
+        <div class="mode-card">
+          <ion-segment
+            [value]="billingMode()"
+            (ionChange)="setBillingMode($event.detail.value)"
+          >
+            <ion-segment-button value="single">
+              <ion-label>Cuenta única</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="shared">
+              <ion-label>Cuenta compartida</ion-label>
+            </ion-segment-button>
+          </ion-segment>
+
+          <div class="mode-hint">
+            <ng-container *ngIf="billingMode() === 'shared'; else singleHint">
+              Elige la cantidad de personas y el nombre de cada cuenta (solo como referencia).
+            </ng-container>
+            <ng-template #singleHint>
+              Todos los productos se cargarán a una sola cuenta.
+            </ng-template>
+          </div>
+        </div>
+
+        <section *ngIf="billingMode() === 'shared'" class="shared-panel" aria-label="Cuenta compartida">
+          <div class="people-row">
+            <div class="people-label">
+              <div class="people-title">Personas</div>
+              <div class="people-subtitle">Mínimo 2 • Máximo 12</div>
+            </div>
+            <div class="people-stepper" aria-label="Cantidad de personas">
+              <button type="button" class="stepper-btn" (click)="decrementPeople()" [disabled]="peopleCount() <= 2">
+                −
+              </button>
+              <div class="stepper-value">{{ peopleCount() }}</div>
+              <button type="button" class="stepper-btn" (click)="incrementPeople()" [disabled]="peopleCount() >= 12">
+                +
+              </button>
+            </div>
+          </div>
+
+          <div class="accounts-form">
+            <div class="accounts-title">Nombres de cuentas</div>
+            <ion-list class="accounts-list" lines="none">
+              <ion-item
+                class="account-item"
+                *ngFor="let name of accountNames(); index as i; trackBy: trackByIndex"
+              >
+                <ion-label position="stacked">Cuenta {{ i + 1 }}</ion-label>
+                <ion-input
+                  [value]="name"
+                  placeholder="Ej: Juan, Ana, Familia..."
+                  inputmode="text"
+                  (ionInput)="setAccountName(i, $event.detail.value)"
+                ></ion-input>
+              </ion-item>
+            </ion-list>
+          </div>
+        </section>
+
+        <button type="button" class="primary-btn" (click)="openTable()">
+          Abrir mesa
+        </button>
+      </section>
+
+      <!-- OCCUPIED -->
+      <section *ngIf="t.status === 'occupied'" class="panel">
+        <h2 class="panel-title">Detalle del pedido</h2>
+        <p class="panel-subtitle">
+          Productos agrupados por cuenta.
+        </p>
+
+        <ng-container *ngIf="order() as o; else emptyOrder">
+          <div class="accounts">
+            <article *ngFor="let account of o.accounts" class="account-card">
+              <header class="account-head">
+                <div class="account-name">{{ account.name }}</div>
+                <div class="account-total">
+                  ${{ accountTotal(o, account.id) | number:'1.2-2' }}
+                </div>
+              </header>
+
+              <div class="items">
+                <div *ngIf="account.items.length === 0" class="empty-items">
+                  Sin productos todavía.
+                </div>
+
+                <div *ngFor="let item of account.items" class="item-row">
+                  <div class="item-left">
+                    <div class="item-name">{{ item.name }}</div>
+                    <div class="item-meta">
+                      {{ item.qty }} × ${{ item.unitPrice | number:'1.2-2' }}
+                    </div>
+                    <div *ngIf="item.status" class="item-status">
+                      {{ item.status }}
+                    </div>
+                  </div>
+                  <div class="item-line">
+                    ${{ (item.qty * item.unitPrice) | number:'1.2-2' }}
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="order-footer">
+            <div class="order-total-label">Total</div>
+            <div class="order-total-value">
+              ${{ orderTotal(o) | number:'1.2-2' }}
+            </div>
+          </div>
+
+          <div class="actions">
+            <button
+              type="button"
+              class="ghost-btn"
+              (click)="irAMenu()"
+            >
+              Agregar productos
+            </button>
+            <button
+              type="button"
+              class="primary-btn"
+              (click)="cobrar()"
+              [disabled]="!canCobrar(o)"
+            >
+              Cobrar
+            </button>
+          </div>
+        </ng-container>
+
+        <ng-template #emptyOrder>
+          <div class="empty-state">
+            No hay detalles de pedido para esta mesa.
+          </div>
+        </ng-template>
+      </section>
+
+      <!-- PAID -->
+      <section *ngIf="t.status === 'pending'" class="panel">
+        <h2 class="panel-title">Orden pagada</h2>
+        <p class="panel-subtitle">
+          Se generó una factura para esta mesa.
+        </p>
+
+        <ng-container *ngIf="invoice() as inv; else noInvoice">
+          <div class="order-footer">
+            <div class="order-total-label">Total</div>
+            <div class="order-total-value">
+              ${{ inv.total | number:'1.2-2' }}
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="primary-btn" (click)="verFactura()">
+              Ver factura
+            </button>
+            <button type="button" class="ghost-btn" (click)="pasarALimpiando()">
+              Pasar a limpiando
+            </button>
+          </div>
+        </ng-container>
+
+        <ng-template #noInvoice>
+          <div class="empty-state">
+            No hay factura registrada para esta mesa.
+          </div>
+        </ng-template>
+      </section>
+
+      <!-- CLEANING -->
+      <section *ngIf="t.status === 'cleaning'" class="panel">
+        <h2 class="panel-title">Mesa en limpieza</h2>
+        <p class="panel-subtitle">
+          Esta mesa está siendo preparada para volver a estar disponible.
+        </p>
+        <div class="actions">
+          <button type="button" class="primary-btn" (click)="marcarDisponible()">
+            Marcar disponible
+          </button>
+        </div>
+      </section>
+    </ng-container>
+
+    <ng-template #notFound>
+      <div class="empty-state">
+        Mesa no encontrada.
+      </div>
+      <button type="button" class="ghost-btn" (click)="goBack()">Volver</button>
+    </ng-template>
+  </div>
+</ion-content>

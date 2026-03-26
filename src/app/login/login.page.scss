@@ -1,0 +1,155 @@
+.pin-page {
+  --background: var(--color-background);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* wrapper centrado */
+.pin-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* card principal */
+.pin-card {
+  width: 100%;
+  max-width: 420px;
+  height: 90vh;
+
+  background: var(--color-surface);
+  border-radius: 32px;
+
+  padding: 32px 24px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  border: 1px solid var(--color-border);
+}
+
+/* header */
+.pin-header {
+  text-align: center;
+
+  .logo {
+    width: 70px;
+    height: 70px;
+    margin: 0 auto 16px;
+    border-radius: 20px;
+
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-primary);
+    margin: 0;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+  }
+}
+
+/* PIN */
+.pin-display {
+  text-align: center;
+  margin-top: 10px;
+
+  p {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: var(--color-text-primary);
+  }
+
+  .error {
+    margin-top: 10px;
+    margin-bottom: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #b91c1c;
+  }
+
+  .dots {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-border);
+  }
+
+  .filled {
+    background: var(--color-primary);
+  }
+}
+
+/* keypad */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+
+  button {
+    height: 72px;
+    border-radius: 18px;
+    border: 1px solid var(--color-border);
+
+    font-size: 22px;
+    font-weight: 500;
+
+    background: var(--color-surface-2);
+    color: var(--color-text-primary);
+
+    transition: 0.15s;
+  }
+
+  button:active {
+    transform: scale(0.95);
+    background: var(--color-hover);
+  }
+}
+
+/* CTA */
+.cta {
+  margin-top: 16px;
+
+  --background: var(--color-primary);
+  --color: var(--color-primary-contrast);
+  --border-radius: 18px;
+
+  height: 56px;
+  font-size: 16px;
+}
+
+/* footer */
+.pin-footer {
+  display: flex;
+  justify-content: center;
+
+  font-size: 13px;
+  color: var(--color-text-secondary);
+
+  margin-top: 8px;
+}

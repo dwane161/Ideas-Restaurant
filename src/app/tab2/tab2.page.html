@@ -1,17 +1,190 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>
-      Tab 2
-    </ion-title>
-  </ion-toolbar>
-</ion-header>
+<ion-content class="menu-page" [fullscreen]="true">
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content pullingText="Actualizar menú" refreshingSpinner="crescent"></ion-refresher-content>
+  </ion-refresher>
 
-<ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Tab 2</ion-title>
-    </ion-toolbar>
-  </ion-header>
+  <div class="menu-container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="avatar" aria-hidden="true"></div>
+        <div class="brand-text">
+          <div class="brand-title">Ideas restaurant</div>
+          <div class="brand-subtitle" *ngIf="user() as u">Atiende: {{ u.name }}</div>
+        </div>
+      </div>
 
-  <app-explore-container name="Tab 2 page"></app-explore-container>
+      <button class="icon-btn" type="button" aria-label="Notificaciones">
+        <ion-icon name="notifications-outline"></ion-icon>
+      </button>
+    </header>
+
+    <nav class="category-strip" aria-label="Categorías">
+      <button
+        *ngFor="let category of categories()"
+        type="button"
+        class="category-pill"
+        [class.active]="category.id === selectedCategoryId"
+        (click)="selectCategory(category.id)"
+      >
+        <span class="pill-icon" aria-hidden="true">
+          <ion-icon name="grid-outline"></ion-icon>
+        </span>
+        <span class="pill-label">{{ category.label }}</span>
+      </button>
+    </nav>
+
+    <section class="section-head">
+      <h1 class="section-title">{{ selectedCategory.label }}</h1>
+      <p class="section-subtitle">{{ selectedCategory.subtitle }}</p>
+    </section>
+
+    <ion-searchbar
+      placeholder="Buscar artículo..."
+      [value]="searchTerm()"
+      (ionInput)="setSearchTerm($event.detail.value)"
+    ></ion-searchbar>
+
+    <div *ngIf="loadError()" class="ion-padding">
+      <ion-text color="danger">{{ loadError() }}</ion-text>
+      <ion-button size="small" fill="clear" (click)="refreshArticulos()">Reintentar</ion-button>
+    </div>
+
+    <div *ngIf="isLoading()" class="ion-padding">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <section class="dish-list" aria-label="Platos">
+      <article
+        *ngFor="let dish of filteredDishes; trackBy: trackDishById"
+        class="dish-card"
+      >
+        <div class="dish-media">
+          <img
+            [src]="getDishImageUrl(dish)"
+            [alt]="dish.name"
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            (error)="onDishImageError(dish)"
+          />
+          <span *ngIf="dish.popular" class="badge">POPULAR</span>
+        </div>
+
+        <div class="dish-body">
+          <div class="dish-row">
+            <h2 class="dish-name">{{ dish.name }}</h2>
+            <div class="dish-price">
+              <ng-container *ngIf="dish.price > 0; else noPrice">
+                ${{ dish.price }}
+              </ng-container>
+              <ng-template #noPrice>—</ng-template>
+            </div>
+          </div>
+
+          <p class="dish-desc">{{ dish.description }}</p>
+
+          <button
+            type="button"
+            class="dish-btn"
+            [class.accent]="dish.buttonVariant === 'accent'"
+            (click)="addToOrder(dish)"
+          >
+            <span class="btn-plus" aria-hidden="true">+</span>
+            <span>Añadir al pedido</span>
+          </button>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <ion-modal
+    [isOpen]="isAddModalOpen()"
+    (didDismiss)="closeAddModal()"
+    [initialBreakpoint]="0.75"
+    [breakpoints]="[0.5, 0.75, 0.95]"
+  >
+    <ng-template>
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>Añadir al pedido</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="closeAddModal()">Cerrar</ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+
+      <ion-content class="add-modal">
+        <div class="modal-body">
+          <div class="modal-dish" *ngIf="pendingDish() as d">
+            <div class="modal-dish-title">{{ d.name }}</div>
+            <div class="modal-dish-sub">
+              ${{ d.price | number:'1.2-2' }}
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div class="modal-section-title">Mesa</div>
+
+            <div *ngIf="occupiedTables().length === 0" class="modal-empty">
+              No hay mesas ocupadas para cargar pedidos.
+            </div>
+
+            <ion-item *ngIf="occupiedTables().length > 0">
+              <ion-label>Mesa</ion-label>
+              <ion-select
+                [value]="selectedTableIdForAdd()"
+                placeholder="Seleccionar"
+                interface="action-sheet"
+                (ionChange)="setTableIdForAdd($event.detail.value)"
+              >
+                <ion-select-option
+                  *ngFor="let t of occupiedTables(); trackBy: trackTableById"
+                  [value]="'' + t.id"
+                >
+                  {{ formatTableLabel(t) }}
+                </ion-select-option>
+              </ion-select>
+            </ion-item>
+          </div>
+
+          <div
+            class="modal-section"
+            *ngIf="selectedTableIdForAdd() && accountsForSelectedTable().length > 1"
+          >
+            <div class="modal-section-title">Cargar a</div>
+            <ion-item>
+              <ion-label>Cuenta</ion-label>
+              <ion-select
+                [value]="selectedAccountIdForAdd()"
+                placeholder="Seleccionar"
+                interface="action-sheet"
+                (ionChange)="setAccountIdForAdd($event.detail.value)"
+              >
+                <ion-select-option
+                  *ngFor="let a of accountsForSelectedTable()"
+                  [value]="a.id"
+                >
+                  {{ a.name }}
+                </ion-select-option>
+              </ion-select>
+            </ion-item>
+          </div>
+
+          <div class="modal-actions">
+            <ion-button
+              expand="block"
+              [disabled]="
+                !pendingDish() ||
+                !selectedTableIdForAdd() ||
+                (accountsForSelectedTable().length > 1 && !selectedAccountIdForAdd())
+              "
+              (click)="confirmAddToOrder()"
+            >
+              Confirmar
+            </ion-button>
+          </div>
+        </div>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
 </ion-content>
