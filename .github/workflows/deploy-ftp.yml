@@ -66,3 +66,8 @@ jobs:
             **/.git*
             **/.DS_Store
             **/.env
+            # Prisma engines are native binaries and can be locked by the running Node process on Windows hosting.
+            # Skipping them avoids "550 ... being used by another process" during deploy.
+            **/node_modules/.prisma/client/*query_engine*
+            **/node_modules/.prisma/client/*.dll.node
+            **/node_modules/.prisma/client/*.so.node
