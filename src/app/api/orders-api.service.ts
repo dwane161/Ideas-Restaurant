@@ -44,6 +44,7 @@ export interface RemoteOrder {
   id: string;
   tableId: number;
   status: string;
+  createdAtIso?: string;
   statusLabel?: string;
   tableStatus?: string | null;
   statusColor?: string | null;

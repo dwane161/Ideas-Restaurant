@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { DiningTablesService, type TableStatus } from './dining-tables.service';
 import { AuthService } from '../auth/auth.service';
+
 @Component({
   selector: 'app-tab1',
   templateUrl: 'tab1.page.html',
@@ -17,6 +18,8 @@ export class Tab1Page {
   readonly hasOrdersLoaded = this.tablesService.hasOrdersLoaded;
   readonly user = this.auth.user;
 
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private readonly router: Router,
     private readonly tablesService: DiningTablesService,
@@ -25,6 +28,24 @@ export class Tab1Page {
 
   ionViewDidEnter(): void {
     this.tablesService.refreshOrdersFromBackend();
+    this.startPolling();
+  }
+
+  ionViewWillLeave(): void {
+    this.stopPolling();
+  }
+
+  private startPolling(): void {
+    if (this.pollTimer) return;
+    this.pollTimer = setInterval(() => {
+      this.tablesService.refreshOrdersFromBackend();
+    }, 5000);
+  }
+
+  private stopPolling(): void {
+    if (!this.pollTimer) return;
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
   }
 
   getOrderItemCount(tableId: number): number {

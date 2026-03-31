@@ -11,6 +11,7 @@ import { registerOrderItemStatusesRoutes } from './routes/order-item-statuses.js
 import { registerOrdersRoutes } from './routes/orders.js';
 import { registerProductosRoutes } from './routes/productos.js';
 import { registerSettingsRoutes } from './routes/settings.js';
+import { registerTablesRoutes } from './routes/tables.js';
 
 const env = loadEnv();
 
@@ -70,6 +71,7 @@ registerArticulosRoutes(api);
 registerProductosRoutes(api);
 registerOrdersRoutes(api);
 registerSettingsRoutes(api);
+registerTablesRoutes(api);
 app.use('/api', api);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

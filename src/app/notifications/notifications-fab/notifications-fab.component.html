@@ -1,0 +1,73 @@
+<ion-fab slot="fixed" vertical="bottom" horizontal="end" class="notif-fab">
+  <ion-fab-button (click)="open()" aria-label="Notificaciones">
+    <ion-icon name="notifications-outline"></ion-icon>
+  </ion-fab-button>
+
+  <div *ngIf="unreadCount() > 0" class="notif-fab-badge" aria-label="Notificaciones no leídas">
+    {{ unreadCount() }}
+  </div>
+</ion-fab>
+
+<ion-modal [isOpen]="isOpen()" (didDismiss)="close()" class="notif-modal">
+  <ng-template>
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Notificaciones</ion-title>
+        <ion-buttons slot="end">
+          <ion-button fill="clear" (click)="clear()">Limpiar</ion-button>
+          <ion-button fill="clear" (click)="close()">Cerrar</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content>
+      <div class="notif-sheet">
+        <div class="notif-sheet-head">
+          <div class="notif-sheet-title">Actividad</div>
+          <div class="notif-sheet-subtitle">
+            <span *ngIf="notifications().length > 0">{{ notifications().length }} en total</span>
+            <span *ngIf="notifications().length === 0">—</span>
+          </div>
+        </div>
+
+        <div class="notif-empty" *ngIf="notifications().length === 0">
+          <div class="notif-empty-icon">
+            <ion-icon name="checkmark-done-outline"></ion-icon>
+          </div>
+          <div class="notif-empty-title">Todo al día</div>
+          <div class="notif-empty-subtitle">No hay notificaciones por ahora.</div>
+        </div>
+
+        <div *ngIf="notifications().length > 0">
+          <div class="notif-group" *ngFor="let g of grouped()">
+            <div class="notif-group-head">
+              <div class="notif-group-title">{{ g.title }}</div>
+              <div class="notif-group-badge" *ngIf="g.unread > 0">{{ g.unread }}</div>
+            </div>
+
+            <div class="notif-list">
+              <button
+                class="notif-row"
+                type="button"
+                *ngFor="let n of g.items"
+                (click)="markRead(n)"
+                [class.unread]="!n.readAt"
+              >
+                <div class="notif-icon" [class.unread]="!n.readAt">
+                  <ion-icon name="restaurant-outline"></ion-icon>
+                </div>
+
+                <div class="notif-body">
+                  <div class="notif-message">{{ n.message }}</div>
+                  <div class="notif-meta">{{ n.createdAt | date:'short' }}</div>
+                </div>
+
+                <div class="notif-pill" *ngIf="!n.readAt">Nuevo</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>

@@ -6731,3 +6731,17 @@ model AppSetting {
 
   @@map("App_Settings")
 }
+
+// Dining tables (drives the table grid in the app).
+model AppTable {
+  id        Int      @id @map("TableId")
+  seats     Int      @default(4) @map("Seats")
+  section   String?  @map("Section") @db.NVarChar(50)
+  sortOrder Int      @default(0) @map("SortOrder")
+  isActive  Boolean  @default(true) @map("IsActive")
+  createdAt DateTime @default(now()) @map("CreatedAt") @db.DateTime
+  updatedAt DateTime @updatedAt @map("UpdatedAt") @db.DateTime
+
+  @@index([isActive, sortOrder])
+  @@map("App_Tables")
+}

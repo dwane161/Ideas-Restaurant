@@ -2,6 +2,8 @@ import { Injectable, computed, signal } from '@angular/core';
 import { OrdersApiService } from '../api/orders-api.service';
 import { AuthService } from '../auth/auth.service';
 import { SettingsService, type AppClientRef } from '../settings/settings.service';
+import { NotifyService } from '../notifications/notify.service';
+import { TablesApiService } from '../api/tables-api.service';
 
 export type TableStatus = 'available' | 'occupied' | 'pending' | 'cleaning';
 
@@ -34,6 +36,7 @@ export interface TableOrder {
   tableId: number;
   accounts: AccountOrder[];
   remoteOrderId?: string;
+  createdAtMs?: number;
 }
 
 export interface TableClientInfo {
@@ -67,21 +70,10 @@ export class DiningTablesService {
   readonly selectedTableId = signal<number | null>(null);
   readonly isOrdersLoading = signal(false);
   readonly hasOrdersLoaded = signal(false);
+  readonly isTablesLoading = signal(false);
+  readonly hasTablesLoaded = signal(false);
 
-  readonly tables = signal<DiningTable[]>([
-    { id: 1, seats: 4, status: 'available' },
-    { id: 2, seats: 4, status: 'available' },
-    { id: 3, seats: 6, status: 'available' },
-    { id: 4, seats: 8, status: 'available' },
-    { id: 5, seats: 4, status: 'available' },
-    { id: 6, seats: 2, status: 'available', selected: true },
-    { id: 7, seats: 4, status: 'available' },
-    { id: 8, seats: 4, status: 'available' },
-    { id: 9, seats: 4, status: 'available' },
-    { id: 10, seats: 2, status: 'available' },
-    { id: 11, seats: 4, status: 'available' },
-    { id: 12, seats: 4, status: 'available' },
-  ]);
+  readonly tables = signal<DiningTable[]>([]);
 
   private readonly ordersByTableId = signal<Record<number, TableOrder>>({});
 
@@ -89,24 +81,80 @@ export class DiningTablesService {
 
   private readonly clientsByTableId = signal<Record<number, TableClientInfo>>({});
 
+  private readonly lastItemStatusByKey = new Map<string, string>();
+  private elapsedTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private readonly ordersApi: OrdersApiService,
     private readonly auth: AuthService,
     private readonly settings: SettingsService,
-  ) {}
+    private readonly notify: NotifyService,
+    private readonly tablesApi: TablesApiService,
+  ) {
+    this.startElapsedTicker();
+  }
+
+  private startElapsedTicker(): void {
+    if (this.elapsedTimer) return;
+    this.elapsedTimer = setInterval(() => {
+      this.updateElapsedForTables();
+    }, 15_000);
+  }
+
+  private updateElapsedForTables(): void {
+    const ordersByTable = this.ordersByTableId();
+    const now = Date.now();
+
+    this.tables.update((tables) =>
+      tables.map((t) => {
+        if (t.status === 'available') return t;
+        const order = ordersByTable[t.id];
+        const createdAt = order?.createdAtMs;
+        if (!createdAt) return t;
+        const elapsed = this.formatElapsed(now - createdAt);
+        return elapsed === t.elapsed ? t : { ...t, elapsed };
+      }),
+    );
+  }
+
+  private parseIsoToMs(value: unknown): number | undefined {
+    const raw = typeof value === 'string' ? value : '';
+    if (!raw) return undefined;
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : undefined;
+  }
+
+  private formatElapsed(diffMs: number): string {
+    const mins = Math.max(0, Math.floor(diffMs / 60_000));
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+
+    if (hours <= 0) return `${mins}M`;
+    if (rem === 0) return `${hours}H`;
+    return `${hours}H ${String(rem).padStart(2, '0')}M`;
+  }
 
   refreshOrdersFromBackend(onDone?: () => void): void {
+    if (!this.hasTablesLoaded() && !this.isTablesLoading()) {
+      this.loadTablesFromBackend(() => this.refreshOrdersFromBackend(onDone));
+      return;
+    }
+
     this.isOrdersLoading.set(true);
     this.ordersApi.listOrders('open,paid,cleaning').subscribe({
       next: (res) => {
         const orders = res?.orders ?? [];
 
+        const newlyCompleted = this.detectNewlyCompletedItems(orders);
+
         const nextOrders: Record<number, TableOrder> = {};
         const nextClients: Record<number, TableClientInfo> = {};
         for (const order of orders) {
+          const createdAtMs = this.parseIsoToMs(order.createdAtIso) ?? Date.now();
           nextOrders[order.tableId] = {
             tableId: order.tableId,
             remoteOrderId: order.id,
+            createdAtMs,
             accounts: order.accounts.map((a) => ({
               id: a.key,
               name: a.name,
@@ -144,6 +192,7 @@ export class DiningTablesService {
               return { ...t, status: 'available', total: undefined, elapsed: undefined };
             }
             const total = this.computeOrderTotal(order);
+            const elapsed = order.createdAtMs ? this.formatElapsed(Date.now() - order.createdAtMs) : undefined;
             const remote = orders.find((o) => o.tableId === t.id);
             const statusFromCatalog = (remote?.tableStatus ?? '').trim().toLowerCase();
             const status =
@@ -157,19 +206,135 @@ export class DiningTablesService {
                   : remote?.status === 'cleaning'
                     ? 'cleaning'
                     : 'occupied';
-            return { ...t, status, total };
+            return { ...t, status, total, elapsed };
           }),
         );
 
         this.hasOrdersLoaded.set(true);
         this.isOrdersLoading.set(false);
         onDone?.();
+
+        if (newlyCompleted.length > 0) {
+          void this.emitCompletedNotifications(newlyCompleted);
+        }
       },
       error: () => {
         this.hasOrdersLoaded.set(true);
         this.isOrdersLoading.set(false);
         onDone?.();
       },
+    });
+  }
+
+  loadTablesFromBackend(onDone?: () => void): void {
+    if (this.isTablesLoading()) return;
+    this.isTablesLoading.set(true);
+
+    this.tablesApi.listTables(true).subscribe({
+      next: (res) => {
+        const rows = (res?.tables ?? [])
+          .filter((t) => t && typeof t.id === 'number' && Number.isFinite(t.id))
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
+
+        const next: DiningTable[] = rows.map((t) => ({
+          id: Number(t.id),
+          seats: Number(t.seats ?? 4) || 4,
+          status: 'available',
+        }));
+
+        this.tables.set(next);
+        this.hasTablesLoaded.set(true);
+        this.isTablesLoading.set(false);
+
+        if (this.selectedTableId() == null && next.length > 0) {
+          this.selectTable(next[0].id);
+        }
+
+        onDone?.();
+      },
+      error: () => {
+        // Keep whatever we already have; avoid blocking the app if tables endpoint fails.
+        this.hasTablesLoaded.set(this.tables().length > 0);
+        this.isTablesLoading.set(false);
+        onDone?.();
+      },
+    });
+  }
+
+  private detectNewlyCompletedItems(
+    orders: Array<{
+      id: string;
+      tableId: number;
+      accounts: Array<{ key: string; items: Array<{ id: string; name: string; qty: number; statusCode?: string; status?: string }> }>;
+    }>,
+  ): Array<{ tableId: number; name: string }> {
+    const hasSnapshot = this.lastItemStatusByKey.size > 0;
+    const nextStatusByKey = new Map<string, string>();
+    const newlyCompleted: Array<{ tableId: number; name: string }> = [];
+
+    for (const order of orders) {
+      for (const account of order.accounts ?? []) {
+        for (const item of account.items ?? []) {
+          const itemId = String(item.id ?? '').trim();
+          if (!itemId) continue;
+          const qty = Number(item.qty ?? 0);
+          const status = String(item.statusCode ?? item.status ?? '').trim().toLowerCase();
+          const key = `${order.id}:${account.key}:${itemId}`;
+          nextStatusByKey.set(key, status);
+
+          if (qty <= 0) continue;
+          if (status !== 'completed') continue;
+          if (!hasSnapshot) continue; // don't notify on first load
+
+          const prev = String(this.lastItemStatusByKey.get(key) ?? '').trim().toLowerCase();
+          if (prev !== 'completed') {
+            newlyCompleted.push({ tableId: order.tableId, name: String(item.name ?? itemId) });
+          }
+        }
+      }
+    }
+
+    this.lastItemStatusByKey.clear();
+    for (const [k, v] of nextStatusByKey) this.lastItemStatusByKey.set(k, v);
+
+    return newlyCompleted;
+  }
+
+  private async emitCompletedNotifications(items: Array<{ tableId: number; name: string }>): Promise<void> {
+    if (items.length === 0) return;
+
+    const formatMesa = (id: number) => `Mesa ${String(id).padStart(2, '0')}`;
+
+    if (items.length === 1) {
+      await this.notify.dishCompleted({
+        message: `${items[0].name} listo • ${formatMesa(items[0].tableId)}`,
+        tableId: items[0].tableId,
+      });
+      return;
+    }
+
+    const byTable = new Map<number, number>();
+    for (const it of items) byTable.set(it.tableId, (byTable.get(it.tableId) ?? 0) + 1);
+
+    if (byTable.size === 1) {
+      const tableId = Array.from(byTable.keys())[0];
+      const count = byTable.get(tableId) ?? items.length;
+      await this.notify.dishCompleted({
+        message: `${count} plato(s) listo(s) • ${formatMesa(tableId)}`,
+        tableId,
+      });
+      return;
+    }
+
+    const tables = Array.from(byTable.keys())
+      .sort((a, b) => a - b)
+      .slice(0, 3)
+      .map(formatMesa)
+      .join(', ');
+    const more = byTable.size > 3 ? ` +${byTable.size - 3}` : '';
+    await this.notify.dishCompleted({
+      message: `${items.length} plato(s) listo(s) • ${tables}${more}`,
+      tableId: null,
     });
   }
 
@@ -300,6 +465,7 @@ export class DiningTablesService {
       [tableId]: {
         tableId,
         accounts,
+        createdAtMs: Date.now(),
       },
     }));
 
@@ -542,12 +708,14 @@ export class DiningTablesService {
       next: (res) => {
         const remote = res?.order;
         if (!remote) return;
+        const createdAtMs = this.parseIsoToMs(remote.createdAtIso) ?? Date.now();
 
         this.ordersByTableId.update((cur) => ({
           ...cur,
           [tableId]: {
             tableId,
             remoteOrderId: remote.id,
+            createdAtMs,
             accounts: remote.accounts.map((a) => ({
               id: a.key,
               name: a.name,
