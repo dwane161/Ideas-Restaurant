@@ -478,15 +478,26 @@ export function registerOrdersRoutes(router: Router) {
         return;
       }
 
-      const total = payload.splits.reduce((sum, s) => sum + s.amount, 0);
+      const computedAmountsByAccountId = new Map<string, number>();
+      for (const item of order.items ?? []) {
+        const qty = Number(item.qty ?? 0);
+        if (qty <= 0) continue;
+        const unitPrice = Number(item.unitPrice);
+        const line = qty * (Number.isFinite(unitPrice) ? unitPrice : 0);
+        computedAmountsByAccountId.set(
+          item.accountId,
+          (computedAmountsByAccountId.get(item.accountId) ?? 0) + line,
+        );
+      }
 
-      const invoice = await prisma.appInvoice.create({
-        data: {
-          orderId,
-          method: payload.method,
-          total,
-          splits: {
-            create: payload.splits.map((s) => {
+      const computedSplits =
+        payload.method === 'amounts'
+          ? order.accounts.map((a) => ({
+              accountId: a.id,
+              amount: computedAmountsByAccountId.get(a.id) ?? 0,
+              percent: null as number | null
+            }))
+          : payload.splits.map((s) => {
               const account = order.accounts.find((a) => a.key === s.accountKey);
               if (!account) {
                 throw new Error(`Unknown accountKey: ${s.accountKey}`);
@@ -496,7 +507,17 @@ export function registerOrdersRoutes(router: Router) {
                 amount: s.amount,
                 percent: s.percent ?? null
               };
-            })
+            });
+
+      const total = computedSplits.reduce((sum, s) => sum + s.amount, 0);
+
+      const invoice = await prisma.appInvoice.create({
+        data: {
+          orderId,
+          method: payload.method,
+          total,
+          splits: {
+            create: computedSplits
           }
         },
         include: { splits: true }

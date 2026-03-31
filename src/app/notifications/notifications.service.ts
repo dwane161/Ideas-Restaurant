@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 
-export type AppNotificationType = 'dish_completed';
+export type AppNotificationType = 'dish_completed' | 'table_completed';
 
 export interface AppNotification {
   id: string;
@@ -85,7 +85,12 @@ export class NotificationsService {
           if (!obj.id || !obj.type || !obj.message || !obj.createdAt) return null;
           return {
             id: String(obj.id),
-            type: obj.type === 'dish_completed' ? 'dish_completed' : 'dish_completed',
+            type:
+              obj.type === 'dish_completed'
+                ? 'dish_completed'
+                : obj.type === 'table_completed'
+                  ? 'table_completed'
+                  : 'dish_completed',
             message: String(obj.message),
             tableId:
               typeof (obj as { tableId?: unknown }).tableId === 'number' &&

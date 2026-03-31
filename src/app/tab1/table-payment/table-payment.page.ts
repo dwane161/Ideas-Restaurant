@@ -1,10 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import {
   DiningTablesService,
-  type PaymentMethod,
   type PaymentSplit,
   type TableOrder,
 } from '../dining-tables.service';
@@ -27,10 +26,6 @@ export class TablePaymentPage {
 
   private readonly tableId = Number(this.route.snapshot.paramMap.get('id'));
 
-  readonly method = signal<PaymentMethod>('percentage');
-  readonly percentageInputs = signal<string[]>([]);
-  readonly amountInputs = signal<string[]>([]);
-
   readonly order = computed<TableOrder | undefined>(() =>
     this.tablesService.getOrder(this.tableId),
   );
@@ -44,6 +39,12 @@ export class TablePaymentPage {
     return this.orderHasItems(order) && this.orderAllItemsCompleted(order);
   });
 
+  readonly canPrint = computed<boolean>(() => {
+    const order = this.order();
+    if (!order) return false;
+    return this.orderHasItems(order);
+  });
+
   readonly total = computed<number>(() => {
     const order = this.order();
     if (!order) return 0;
@@ -55,26 +56,22 @@ export class TablePaymentPage {
 
   readonly isShared = computed(() => (this.order()?.accounts.length ?? 0) > 1);
 
-  readonly isValid = computed(() => {
+  readonly accountAmounts = computed(() => {
     const order = this.order();
-    if (!order) return false;
-    if (order.accounts.length < 2) return true;
-
-    const total = this.total();
-    if (total <= 0) return false;
-
-    if (this.method() === 'percentage') {
-      const values = this.percentages();
-      const sum = values.reduce((s, v) => s + v, 0);
-      return Math.abs(sum - 100) < 0.01;
-    }
-
-    const values = this.amounts();
-    const sum = values.reduce((s, v) => s + v, 0);
-    return Math.abs(sum - total) < 0.01;
+    if (!order) return [];
+    return order.accounts.map((a) => {
+      const amount = a.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+      const itemCount = a.items.reduce((s, i) => s + (i.qty ?? 0), 0);
+      return {
+        accountId: a.id,
+        accountName: a.name,
+        amount,
+        itemCount,
+      };
+    });
   });
 
-  readonly canConfirmPayment = computed(() => this.isValid() && this.canCobrar());
+  readonly canConfirmPayment = computed(() => this.canCobrar() && this.total() > 0);
 
   get tableLabel(): string {
     return `Mesa ${String(this.tableId).padStart(2, '0')}`;
@@ -83,18 +80,6 @@ export class TablePaymentPage {
   ionViewWillEnter(): void {
     const order = this.tablesService.getOrder(this.tableId);
     if (!order) return;
-
-    const count = order.accounts.length;
-    if (count <= 1) return;
-
-    if (this.percentageInputs().length !== count) {
-      const even = (100 / count).toFixed(2);
-      this.percentageInputs.set(Array.from({ length: count }, () => even));
-    }
-
-    if (this.amountInputs().length !== count) {
-      this.amountInputs.set(Array.from({ length: count }, () => '0'));
-    }
 
     const info = this.tablesService.getClientInfo(this.tableId);
     if (info.client && !info.beneficiary && !this.beneficiaryPrompted) {
@@ -172,41 +157,6 @@ export class TablePaymentPage {
     this.tablesService.clearClientInfo(this.tableId);
   }
 
-  setMethod(value: unknown): void {
-    this.method.set(value === 'amounts' ? 'amounts' : 'percentage');
-  }
-
-  setPercentage(index: number, value: unknown): void {
-    const next = [...this.percentageInputs()];
-    next[index] = typeof value === 'string' ? value : String(value ?? '');
-    this.percentageInputs.set(next);
-  }
-
-  setAmount(index: number, value: unknown): void {
-    const next = [...this.amountInputs()];
-    next[index] = typeof value === 'string' ? value : String(value ?? '');
-    this.amountInputs.set(next);
-  }
-
-  percentages(): number[] {
-    const order = this.order();
-    if (!order) return [];
-    return order.accounts.map((_, idx) => this.parseNumber(this.percentageInputs()[idx]));
-  }
-
-  amountFromPercentage(index: number): number {
-    const total = this.total();
-    if (total <= 0) return 0;
-    const percent = this.parseNumber(this.percentageInputs()[index]);
-    return (total * percent) / 100;
-  }
-
-  amounts(): number[] {
-    const order = this.order();
-    if (!order) return [];
-    return order.accounts.map((_, idx) => this.parseNumber(this.amountInputs()[idx]));
-  }
-
   async confirmPayment(): Promise<void> {
     const order = this.order();
     if (!order) return;
@@ -229,48 +179,21 @@ export class TablePaymentPage {
       return;
     }
 
-    if (!this.isValid()) {
-      const alert = await this.alertController.create({
-        header: 'Revisa el cobro',
-        message:
-          this.method() === 'percentage'
-            ? 'Los porcentajes deben sumar 100%.'
-            : 'Los montos deben sumar el total.',
-        buttons: ['OK'],
-      });
-      await alert.present();
-      return;
-    }
-
     const total = this.total();
-    const method = this.method();
-
-    let splits: PaymentSplit[] = [];
-    if (order.accounts.length <= 1) {
-      const a = order.accounts[0];
-      splits = [
-        {
-          accountId: a.id,
-          accountName: a.name,
-          amount: total,
-        },
-      ];
-    } else if (method === 'percentage') {
-      const percents = this.percentages();
-      splits = order.accounts.map((a, idx) => ({
-        accountId: a.id,
-        accountName: a.name,
-        percent: percents[idx],
-        amount: (total * percents[idx]) / 100,
-      }));
-    } else {
-      const amounts = this.amounts();
-      splits = order.accounts.map((a, idx) => ({
-        accountId: a.id,
-        accountName: a.name,
-        amount: amounts[idx],
-      }));
-    }
+    const splits: PaymentSplit[] =
+      order.accounts.length <= 1
+        ? [
+            {
+              accountId: order.accounts[0].id,
+              accountName: order.accounts[0].name,
+              amount: total,
+            },
+          ]
+        : this.accountAmounts().map((a) => ({
+            accountId: a.accountId,
+            accountName: a.accountName,
+            amount: a.amount,
+          }));
 
     const confirm = await this.alertController.create({
       header: 'Confirmar cobro',
@@ -284,14 +207,105 @@ export class TablePaymentPage {
     const result = await confirm.onDidDismiss();
     if (result.role !== 'confirm') return;
 
-    const invoice = this.tablesService.payOrder(this.tableId, method, splits);
+    const invoice = this.tablesService.payOrder(this.tableId, 'amounts', splits);
     if (!invoice) return;
 
     this.router.navigate([`/tabs/tab1/mesa/${this.tableId}/factura`]);
   }
 
+  async imprimirCobro(): Promise<void> {
+    const order = this.order();
+    if (!order) return;
+
+    const info = this.tablesService.getClientInfo(this.tableId);
+    if (info.client && !info.beneficiary) {
+      await this.promptBeneficiary();
+      const next = this.tablesService.getClientInfo(this.tableId);
+      if (!next.beneficiary) return;
+    }
+
+    const total = this.total();
+    const client = this.clientInfo().client;
+    const beneficiary = this.clientInfo().beneficiary;
+
+    const accountSections = order.accounts.map((account) => {
+      const amount = account.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+      const lines = account.items
+        .filter((i) => i.qty > 0)
+        .map(
+          (i) =>
+            `<tr><td>${i.qty} x ${this.escapeHtml(i.name)}</td><td class="right">$${(i.qty * i.unitPrice).toFixed(2)}</td></tr>`,
+        )
+        .join('');
+
+      const title = `${this.escapeHtml(account.name)} — $${amount.toFixed(2)}`;
+
+      return `
+        <div class="section">
+          <div class="section-title">${title}</div>
+          <table>
+            ${lines || `<tr><td colspan="2" class="muted">Sin productos.</td></tr>`}
+          </table>
+        </div>
+      `;
+    });
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Cobro</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; }
+            h1 { font-size: 18px; margin: 0 0 8px; }
+            .meta { color: #555; font-size: 12px; margin-bottom: 10px; }
+            .section { margin: 14px 0; }
+            .section-title { font-weight: 700; font-size: 13px; margin: 0 0 6px; }
+            table { width: 100%; border-collapse: collapse; }
+            td { padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+            .right { text-align: right; white-space: nowrap; }
+            .muted { color: #777; font-size: 12px; padding: 10px 0; }
+            .total { font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <h1>${this.tableLabel}</h1>
+          <div class="meta">
+            ${client ? `Cliente: ${this.escapeHtml(client.name)} (${this.escapeHtml(client.id)})<br/>` : ''}
+            ${beneficiary ? `Beneficiario: ${this.escapeHtml(beneficiary)}<br/>` : ''}
+            ${new Date().toLocaleString()}
+          </div>
+          ${accountSections.join('')}
+          <table>
+            <tr><td class="total">Total</td><td class="right total">$${total.toFixed(2)}</td></tr>
+          </table>
+          <script>window.print(); setTimeout(() => window.close(), 250);</script>
+        </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      window.print();
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
   private orderHasItems(order: TableOrder): boolean {
     return order.accounts.some((a) => a.items.some((i) => i.qty > 0));
+  }
+
+  private escapeHtml(value: string): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private isItemCompleted(status: string | undefined): boolean {
@@ -306,13 +320,6 @@ export class TablePaymentPage {
       }
     }
     return items.length > 0 && items.every((item) => this.isItemCompleted(item.statusCode));
-  }
-
-  private parseNumber(value: unknown): number {
-    const raw = typeof value === 'string' ? value : String(value ?? '');
-    const normalized = raw.replace(',', '.');
-    const num = Number(normalized);
-    return Number.isFinite(num) ? num : 0;
   }
 
   private async promptBeneficiary(): Promise<void> {

@@ -13,6 +13,14 @@ export function registerTablesRoutes(router: Router) {
   router.get('/tables', async (req, res, next) => {
     try {
       const prisma = await getPrisma();
+      const appTable = (prisma as unknown as { appTable?: { findMany?: Function } }).appTable;
+      if (!appTable?.findMany) {
+        res.status(500).json({
+          error:
+            'Prisma Client desactualizado: falta el modelo AppTable. Ejecuta `npm install` (o `npx prisma generate`) y reinicia el backend.',
+        });
+        return;
+      }
       const { active } = listSchema.parse(req.query);
 
       const rows = await prisma.appTable.findMany({
@@ -41,4 +49,3 @@ export function registerTablesRoutes(router: Router) {
     }
   });
 }
-

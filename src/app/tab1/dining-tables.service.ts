@@ -82,6 +82,7 @@ export class DiningTablesService {
   private readonly clientsByTableId = signal<Record<number, TableClientInfo>>({});
 
   private readonly lastItemStatusByKey = new Map<string, string>();
+  private readonly lastOrderAllCompletedById = new Map<string, boolean>();
   private elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -146,6 +147,7 @@ export class DiningTablesService {
         const orders = res?.orders ?? [];
 
         const newlyCompleted = this.detectNewlyCompletedItems(orders);
+        const newlyAllCompleted = this.detectNewlyAllCompletedTables(orders);
 
         const nextOrders: Record<number, TableOrder> = {};
         const nextClients: Record<number, TableClientInfo> = {};
@@ -216,6 +218,10 @@ export class DiningTablesService {
 
         if (newlyCompleted.length > 0) {
           void this.emitCompletedNotifications(newlyCompleted);
+        }
+
+        if (newlyAllCompleted.length > 0) {
+          void this.emitTableCompletedNotifications(newlyAllCompleted);
         }
       },
       error: () => {
@@ -300,6 +306,51 @@ export class DiningTablesService {
     return newlyCompleted;
   }
 
+  private detectNewlyAllCompletedTables(
+    orders: Array<{
+      id: string;
+      tableId: number;
+      accounts: Array<{ key: string; items: Array<{ id: string; qty: number; statusCode?: string; status?: string }> }>;
+    }>,
+  ): number[] {
+    const hasSnapshot = this.lastOrderAllCompletedById.size > 0;
+    const nextByOrderId = new Map<string, boolean>();
+    const newly: number[] = [];
+
+    for (const order of orders) {
+      const orderId = String(order.id ?? '').trim();
+      if (!orderId) continue;
+
+      let presentCount = 0;
+      let allCompleted = true;
+
+      for (const account of order.accounts ?? []) {
+        for (const item of account.items ?? []) {
+          const qty = Number(item.qty ?? 0);
+          if (qty <= 0) continue;
+          presentCount += 1;
+          const status = String(item.statusCode ?? item.status ?? '').trim().toLowerCase();
+          if (status !== 'completed') allCompleted = false;
+        }
+      }
+
+      const isReady = presentCount > 0 && allCompleted;
+      nextByOrderId.set(orderId, isReady);
+
+      if (!hasSnapshot) continue; // don't notify on first load
+
+      const prev = this.lastOrderAllCompletedById.get(orderId) ?? false;
+      if (!prev && isReady) {
+        newly.push(order.tableId);
+      }
+    }
+
+    this.lastOrderAllCompletedById.clear();
+    for (const [k, v] of nextByOrderId) this.lastOrderAllCompletedById.set(k, v);
+
+    return newly;
+  }
+
   private async emitCompletedNotifications(items: Array<{ tableId: number; name: string }>): Promise<void> {
     if (items.length === 0) return;
 
@@ -334,6 +385,30 @@ export class DiningTablesService {
     const more = byTable.size > 3 ? ` +${byTable.size - 3}` : '';
     await this.notify.dishCompleted({
       message: `${items.length} plato(s) listo(s) • ${tables}${more}`,
+      tableId: null,
+    });
+  }
+
+  private async emitTableCompletedNotifications(tableIds: number[]): Promise<void> {
+    const ids = (tableIds ?? []).filter((id) => typeof id === 'number' && Number.isFinite(id));
+    if (ids.length === 0) return;
+
+    const formatMesa = (id: number) => `Mesa ${String(id).padStart(2, '0')}`;
+
+    const uniqueSorted = Array.from(new Set(ids)).sort((a, b) => a - b);
+    if (uniqueSorted.length === 1) {
+      const tableId = uniqueSorted[0];
+      await this.notify.tableCompleted({
+        message: `${formatMesa(tableId)} lista para cobrar`,
+        tableId,
+      });
+      return;
+    }
+
+    const tables = uniqueSorted.slice(0, 3).map(formatMesa).join(', ');
+    const more = uniqueSorted.length > 3 ? ` +${uniqueSorted.length - 3}` : '';
+    await this.notify.tableCompleted({
+      message: `Mesas listas para cobrar: ${tables}${more}`,
       tableId: null,
     });
   }

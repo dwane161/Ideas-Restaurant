@@ -48,69 +48,22 @@
 
         <ng-container *ngIf="isShared(); else singleAccount">
           <p class="panel-subtitle">
-            Selecciona cómo se dividirá el pago entre cuentas.
+            Montos por cliente (según lo que pidió cada uno).
           </p>
 
-          <ion-segment
-            [value]="method()"
-            (ionChange)="setMethod($event.detail.value)"
-          >
-            <ion-segment-button value="percentage">
-              <ion-label>Porcentaje</ion-label>
-            </ion-segment-button>
-            <ion-segment-button value="amounts">
-              <ion-label>Montos</ion-label>
-            </ion-segment-button>
-          </ion-segment>
-
-          <div class="split-panel" *ngIf="method() === 'percentage'">
-            <div class="hint">
-              La suma debe ser 100%.
-            </div>
+          <div class="split-panel">
+            <div class="hint">Calculado automáticamente desde los items por cuenta.</div>
 
             <div class="split-grid">
-              <div class="split-row" *ngFor="let account of o.accounts; index as i">
+              <div class="split-row" *ngFor="let a of accountAmounts(); index as i">
                 <div class="split-left">
-                  <div class="split-name">{{ account.name }}</div>
-                  <div class="split-meta">Cuenta {{ i + 1 }}</div>
+                  <div class="split-name">{{ a.accountName }}</div>
+                  <div class="split-meta">
+                    {{ a.itemCount }} plato(s)
+                  </div>
                 </div>
                 <div class="split-right">
-                  <ion-input
-                    class="split-input"
-                    inputmode="decimal"
-                    placeholder="0"
-                    [value]="percentageInputs()[i]"
-                    (ionInput)="setPercentage(i, $event.detail.value)"
-                  ></ion-input>
-                  <span class="suffix">%</span>
-                  <span class="calc-amount">
-                    ${{ amountFromPercentage(i) | number:'1.2-2' }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="split-panel" *ngIf="method() === 'amounts'">
-            <div class="hint">
-              La suma debe ser igual al total.
-            </div>
-
-            <div class="split-grid">
-              <div class="split-row" *ngFor="let account of o.accounts; index as i">
-                <div class="split-left">
-                  <div class="split-name">{{ account.name }}</div>
-                  <div class="split-meta">Cuenta {{ i + 1 }}</div>
-                </div>
-                <div class="split-right">
-                  <span class="prefix">$</span>
-                  <ion-input
-                    class="split-input"
-                    inputmode="decimal"
-                    placeholder="0"
-                    [value]="amountInputs()[i]"
-                    (ionInput)="setAmount(i, $event.detail.value)"
-                  ></ion-input>
+                  <span class="calc-amount">${{ a.amount | number:'1.2-2' }}</span>
                 </div>
               </div>
             </div>
@@ -122,17 +75,7 @@
             [class.bad]="!canConfirmPayment()"
           >
             <ng-container *ngIf="canCobrar(); else notReady">
-              <ng-container *ngIf="isValid(); else invalid">
-                Listo para confirmar el cobro.
-              </ng-container>
-              <ng-template #invalid>
-                <ng-container *ngIf="method() === 'percentage'; else invalidAmounts">
-                  Revisa que los porcentajes sumen 100%.
-                </ng-container>
-                <ng-template #invalidAmounts>
-                  Revisa que los montos sumen el total.
-                </ng-template>
-              </ng-template>
+              Listo para confirmar el cobro.
             </ng-container>
             <ng-template #notReady>
               Solo se puede cobrar cuando todos los items estén en estado COMPLETED.
@@ -146,6 +89,15 @@
           </p>
         </ng-template>
       </section>
+
+      <button
+        type="button"
+        class="ghost-btn"
+        (click)="imprimirCobro()"
+        [disabled]="!canPrint()"
+      >
+        Imprimir
+      </button>
 
       <button
         type="button"

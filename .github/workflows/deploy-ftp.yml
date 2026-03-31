@@ -1,0 +1,68 @@
+name: Deploy (FTP)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-ftp-main
+  cancel-in-progress: true
+
+jobs:
+  deploy-backend:
+    # Deploy only after merge to main when triggered by pull_request.
+    if: |
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install deps (backend)
+        working-directory: backend
+        run: npm ci
+
+      - name: Build (backend)
+        working-directory: backend
+        run: npm run build
+
+      # Optional: reduce upload size (keeps runtime deps only)
+      - name: Prune dev deps (backend)
+        working-directory: backend
+        run: npm prune --omit=dev
+
+      - name: Prepare deploy folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force deploy_backend | Out-Null
+          Copy-Item -Recurse -Force backend\dist deploy_backend\dist
+          Copy-Item -Recurse -Force backend\node_modules deploy_backend\node_modules
+          Copy-Item -Force backend\package.json deploy_backend\package.json
+          if (Test-Path backend\prisma) { Copy-Item -Recurse -Force backend\prisma deploy_backend\prisma }
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Example: "/www/ideas-restaurant/" (ajusta según tu hosting)
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          local-dir: deploy_backend/
+          exclude: |
+            **/.git*
+            **/.DS_Store
+            **/.env

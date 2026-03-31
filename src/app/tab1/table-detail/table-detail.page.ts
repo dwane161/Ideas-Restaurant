@@ -51,7 +51,10 @@ export class TableDetailPage {
   private beneficiaryPrompted = false;
 
   ionViewWillEnter(): void {
-    // If a client is set (default or manual), beneficiary must be chosen per-order.
+    // For older orders that may not have beneficiary yet, enforce it when table is occupied.
+    const t = this.tablesService.getTable(this.tableId);
+    if (t?.status !== 'occupied') return;
+
     const info = this.tablesService.getClientInfo(this.tableId);
     if (info.client && !info.beneficiary && !this.beneficiaryPrompted) {
       this.beneficiaryPrompted = true;
@@ -67,7 +70,16 @@ export class TableDetailPage {
     this.router.navigate(['/tabs/tab1']);
   }
 
-  openTable(): void {
+  async openTable(): Promise<void> {
+    // Beneficiary must be selected when a client is present (default or manual) at the moment of opening.
+    const info = this.tablesService.getClientInfo(this.tableId);
+    if (info.client && !info.beneficiary) {
+      const ok = await this.promptBeneficiary();
+      if (!ok) return;
+      const next = this.tablesService.getClientInfo(this.tableId);
+      if (!next.beneficiary) return;
+    }
+
     const mode = this.billingMode();
     if (mode === 'shared') {
       const count = this.clampPeopleCount(this.peopleCount());
@@ -85,7 +97,8 @@ export class TableDetailPage {
 
     const info = this.tablesService.getClientInfo(this.tableId);
     if (info.client && !info.beneficiary) {
-      await this.promptBeneficiary();
+      const ok = await this.promptBeneficiary();
+      if (!ok) return;
       const next = this.tablesService.getClientInfo(this.tableId);
       if (!next.beneficiary) return;
     }
@@ -208,76 +221,6 @@ export class TableDetailPage {
     this.tablesService.clearClientInfo(this.tableId);
   }
 
-  imprimirOrden(): void {
-    const order = this.tablesService.getOrder(this.tableId);
-    if (!order) return;
-
-    const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary) {
-      void this.promptBeneficiary();
-      return;
-    }
-
-    const total = this.orderTotal(order);
-    const client = this.clientInfo().client;
-    const beneficiary = this.clientInfo().beneficiary;
-
-    const lines: Array<{ name: string; qty: number; unitPrice: number }> = [];
-    for (const account of order.accounts) {
-      for (const item of account.items) {
-        if (item.qty > 0) {
-          lines.push({ name: item.name, qty: item.qty, unitPrice: item.unitPrice });
-        }
-      }
-    }
-
-    const html = `
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Orden</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 16px; }
-            h1 { font-size: 18px; margin: 0 0 8px; }
-            .meta { color: #555; font-size: 12px; margin-bottom: 10px; }
-            table { width: 100%; border-collapse: collapse; }
-            td { padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px; }
-            .right { text-align: right; white-space: nowrap; }
-            .total { font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>${this.tableLabel}</h1>
-          <div class="meta">
-            ${client ? `Cliente: ${client.name} (${client.id})<br/>` : ''}
-            ${beneficiary ? `Beneficiario: ${beneficiary}<br/>` : ''}
-            ${new Date().toLocaleString()}
-          </div>
-          <table>
-            ${lines
-              .map(
-                (i) =>
-                  `<tr><td>${i.qty} x ${i.name}</td><td class="right">$${(i.qty * i.unitPrice).toFixed(2)}</td></tr>`,
-              )
-              .join('')}
-            <tr><td class="total">Total</td><td class="right total">$${total.toFixed(2)}</td></tr>
-          </table>
-          <script>window.print(); setTimeout(() => window.close(), 250);</script>
-        </body>
-      </html>
-    `;
-
-    const w = window.open('', '_blank');
-    if (!w) {
-      window.print();
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-  }
-
   itemStatusClass(status: string | undefined): string {
     const s = (status ?? '').trim().toLowerCase();
     if (s === 'completed') return 'completed';
@@ -286,9 +229,9 @@ export class TableDetailPage {
     return 'unknown';
   }
 
-  private async promptBeneficiary(): Promise<void> {
+  private async promptBeneficiary(): Promise<boolean> {
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (!info.client) return;
+    if (!info.client) return true;
 
     const beneficiary = await this.alertController.create({
       header: 'Beneficiario',
@@ -301,9 +244,19 @@ export class TableDetailPage {
     });
     await beneficiary.present();
     const benResult = await beneficiary.onDidDismiss();
-    if (benResult.role !== 'confirm') return;
+    if (benResult.role !== 'confirm') return false;
     const value = String(benResult.data?.values?.beneficiary ?? '').trim();
+    if (!value) {
+      const alert = await this.alertController.create({
+        header: 'Beneficiario requerido',
+        message: 'Debes indicar un beneficiario para continuar.',
+        buttons: ['OK'],
+      });
+      await alert.present();
+      return false;
+    }
     this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: value });
+    return true;
   }
 
   verFactura(): void {

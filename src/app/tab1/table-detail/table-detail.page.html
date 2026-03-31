@@ -193,14 +193,6 @@
             </button>
             <button
               type="button"
-              class="ghost-btn"
-              [disabled]="!orderHasItems(o)"
-              (click)="imprimirOrden()"
-            >
-              Imprimir orden
-            </button>
-            <button
-              type="button"
               class="primary-btn"
               (click)="cobrar()"
               [disabled]="!canCobrar(o)"
