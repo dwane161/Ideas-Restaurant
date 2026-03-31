@@ -12,6 +12,13 @@ concurrency:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    env:
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,16 +82,16 @@ jobs:
           if-no-files-found: error
 
       - name: Email APK (optional)
-        if: ${{ secrets.SMTP_HOST != '' && secrets.MAIL_TO != '' && secrets.MAIL_FROM != '' }}
+        if: ${{ env.SMTP_HOST != '' && env.MAIL_TO != '' && env.MAIL_FROM != '' }}
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: ${{ secrets.SMTP_HOST }}
-          server_port: ${{ secrets.SMTP_PORT || '587' }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
+          server_address: ${{ env.SMTP_HOST }}
+          server_port: ${{ env.SMTP_PORT || '587' }}
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
           subject: Ideas Restaurant APK (${{ github.sha }})
-          to: ${{ secrets.MAIL_TO }}
-          from: ${{ secrets.MAIL_FROM }}
+          to: ${{ env.MAIL_TO }}
+          from: ${{ env.MAIL_FROM }}
           body: |
             Build listo.
             Descarga (si el adjunto falla): https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
