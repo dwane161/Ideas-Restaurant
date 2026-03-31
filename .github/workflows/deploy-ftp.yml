@@ -39,17 +39,11 @@ jobs:
         working-directory: backend
         run: npm run build
 
-      # Optional: reduce upload size (keeps runtime deps only)
-      - name: Prune dev deps (backend)
-        working-directory: backend
-        run: npm prune --omit=dev
-
       - name: Prepare deploy folder
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force deploy_backend | Out-Null
           Copy-Item -Recurse -Force backend\dist deploy_backend\dist
-          Copy-Item -Recurse -Force backend\node_modules deploy_backend\node_modules
           Copy-Item -Force backend\package.json deploy_backend\package.json
           if (Test-Path backend\prisma) { Copy-Item -Recurse -Force backend\prisma deploy_backend\prisma }
 
@@ -66,20 +60,3 @@ jobs:
             **/.git*
             **/.DS_Store
             **/.env
-            # Prisma engines are native binaries and can be locked by the running Node process on Windows hosting.
-            # Skipping them avoids "550 ... being used by another process" during deploy.
-            **/node_modules/.prisma/client/*query_engine*
-            **/node_modules/.prisma/client/*.dll.node
-            **/node_modules/.prisma/client/*.so.node
-            # Some FTP hosts block dotfiles/dot-directories (e.g. ".github", ".eslintrc") inside node_modules.
-            # These are not needed at runtime and can cause "550 The system cannot find the path specified."
-            **/node_modules/**/.github/**
-            **/node_modules/**/.eslintrc
-            **/node_modules/**/.eslintrc.*
-            **/node_modules/**/.eslintignore
-            **/node_modules/**/.prettierrc
-            **/node_modules/**/.prettierrc.*
-            **/node_modules/**/.editorconfig
-            **/node_modules/**/.npmignore
-            **/node_modules/**/.gitattributes
-            **/node_modules/**/.gitignore

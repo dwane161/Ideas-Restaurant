@@ -14,3 +14,15 @@ Configura estos **GitHub Secrets** (Settings → Secrets and variables → Actio
 - `FTP_SERVER_DIR` (carpeta remota donde está tu Node app, ej: `/www/ideas-restaurant/`)
 
 Nota: en el hosting, define `DATABASE_URL` (y demás variables) como variables de entorno del sitio; el workflow no sube `.env`.
+
+### Importante (node_modules)
+
+Para que el deploy por FTP sea **rápido y estable**, el workflow sube **solo**:
+- `backend/dist/`
+- `backend/prisma/`
+- `backend/package.json`
+
+`node_modules` se mantiene instalado en el servidor. Si cambias dependencias (`backend/package.json`), haz un mantenimiento:
+- detener la app Node en el hosting,
+- actualizar/instalar dependencias en el servidor (según lo que permita el panel),
+- volver a iniciar la app.
