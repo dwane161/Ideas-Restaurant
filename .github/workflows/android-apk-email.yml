@@ -81,6 +81,24 @@ jobs:
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
 
+      - name: Mail preflight
+        if: ${{ env.SMTP_HOST != '' && env.MAIL_TO != '' && env.MAIL_FROM != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "SMTP_HOST set: $([[ -n '${SMTP_HOST}' ]] && echo yes || echo no)"
+          echo "SMTP_PORT set: $([[ -n '${SMTP_PORT}' ]] && echo yes || echo no)"
+          echo "SMTP_USERNAME set: $([[ -n '${SMTP_USERNAME}' ]] && echo yes || echo no)"
+          echo "SMTP_PASSWORD set: $([[ -n '${SMTP_PASSWORD}' ]] && echo yes || echo no)"
+          echo "MAIL_TO set: $([[ -n '${MAIL_TO}' ]] && echo yes || echo no)"
+          echo "MAIL_FROM set: $([[ -n '${MAIL_FROM}' ]] && echo yes || echo no)"
+          # For SSL SMTP (465) we must use secure=true. For 587 we keep secure=false (STARTTLS).
+          if [[ "${SMTP_PORT:-}" == "465" ]]; then
+            echo "MAIL_SECURE=true" >> "$GITHUB_ENV"
+          else
+            echo "MAIL_SECURE=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Email APK (optional)
         if: ${{ env.SMTP_HOST != '' && env.MAIL_TO != '' && env.MAIL_FROM != '' }}
         uses: dawidd6/action-send-mail@v3
@@ -89,6 +107,7 @@ jobs:
           server_port: ${{ env.SMTP_PORT || '587' }}
           username: ${{ env.SMTP_USERNAME }}
           password: ${{ env.SMTP_PASSWORD }}
+          secure: ${{ env.MAIL_SECURE }}
           subject: Ideas Restaurant APK (${{ github.sha }})
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_FROM }}
