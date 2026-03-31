@@ -71,3 +71,15 @@ jobs:
             **/node_modules/.prisma/client/*query_engine*
             **/node_modules/.prisma/client/*.dll.node
             **/node_modules/.prisma/client/*.so.node
+            # Some FTP hosts block dotfiles/dot-directories (e.g. ".github", ".eslintrc") inside node_modules.
+            # These are not needed at runtime and can cause "550 The system cannot find the path specified."
+            **/node_modules/**/.github/**
+            **/node_modules/**/.eslintrc
+            **/node_modules/**/.eslintrc.*
+            **/node_modules/**/.eslintignore
+            **/node_modules/**/.prettierrc
+            **/node_modules/**/.prettierrc.*
+            **/node_modules/**/.editorconfig
+            **/node_modules/**/.npmignore
+            **/node_modules/**/.gitattributes
+            **/node_modules/**/.gitignore
