@@ -16,6 +16,36 @@
           <div class="panel-amount">${{ total() | number:'1.2-2' }}</div>
         </div>
 
+        <div class="client-card">
+          <div class="client-row">
+            <div class="client-label">Cliente</div>
+            <div class="client-value">
+              <ng-container *ngIf="clientInfo().client as c; else noClient">
+                {{ c.name }} ({{ c.id }})
+              </ng-container>
+              <ng-template #noClient>—</ng-template>
+            </div>
+          </div>
+          <div class="client-row">
+            <div class="client-label">Beneficiario</div>
+            <div class="client-value">{{ clientInfo().beneficiary || '—' }}</div>
+          </div>
+
+          <div class="client-actions">
+            <button type="button" class="ghost-btn" (click)="elegirCliente()">
+              Elegir cliente
+            </button>
+            <button
+              type="button"
+              class="ghost-btn"
+              [disabled]="!clientInfo().client"
+              (click)="quitarCliente()"
+            >
+              Quitar cliente
+            </button>
+          </div>
+        </div>
+
         <ng-container *ngIf="isShared(); else singleAccount">
           <p class="panel-subtitle">
             Selecciona cómo se dividirá el pago entre cuentas.

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { environment } from '../../environments/environment';
 import { Observable } from 'rxjs';
+import { SettingsService } from '../settings/settings.service';
 
 export interface AuxCArticuloDto {
   CA_ID: string;
@@ -35,7 +35,10 @@ export interface ListProductosResponse {
 
 @Injectable({ providedIn: 'root' })
 export class ArticulosApiService {
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly settings: SettingsService,
+  ) {}
 
   listCategorias(opts?: {
     q?: string;
@@ -49,7 +52,7 @@ export class ArticulosApiService {
     if (typeof opts?.take === 'number') params = params.set('take', String(opts.take));
     if (typeof opts?.skip === 'number') params = params.set('skip', String(opts.skip));
 
-    return this.http.get<ListCategoriasResponse>(`${environment.apiBaseUrl}/articulos`, { params });
+    return this.http.get<ListCategoriasResponse>(`${this.settings.apiBaseUrl()}/articulos`, { params });
   }
 
   listProductos(opts?: {
@@ -70,6 +73,6 @@ export class ArticulosApiService {
     if (typeof opts?.take === 'number') params = params.set('take', String(opts.take));
     if (typeof opts?.skip === 'number') params = params.set('skip', String(opts.skip));
 
-    return this.http.get<ListProductosResponse>(`${environment.apiBaseUrl}/productos`, { params });
+    return this.http.get<ListProductosResponse>(`${this.settings.apiBaseUrl()}/productos`, { params });
   }
 }

@@ -1,6 +1,6 @@
 import type { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../prisma.js';
+import { getPrisma } from '../prisma.js';
 
 const listQuerySchema = z.object({
   cat: z.string().min(1).optional(),
@@ -18,6 +18,7 @@ const listQuerySchema = z.object({
 export function registerProductosRoutes(router: Router) {
   router.get('/productos', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const query = listQuerySchema.parse(req.query);
       const moneda = query.moneda ?? 'DOP';
 
@@ -86,6 +87,7 @@ export function registerProductosRoutes(router: Router) {
 
   router.get('/productos/:id', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const id = z.string().min(1).parse(req.params.id);
       const item = await prisma.maint_Inventario.findUnique({
         where: { Art_ID: id },

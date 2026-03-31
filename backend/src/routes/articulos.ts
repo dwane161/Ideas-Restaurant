@@ -1,6 +1,6 @@
 import type { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../prisma.js';
+import { getPrisma } from '../prisma.js';
 
 const listQuerySchema = z.object({
   q: z.string().min(1).optional(),
@@ -15,6 +15,7 @@ const listQuerySchema = z.object({
 export function registerArticulosRoutes(router: Router) {
   router.get('/articulos', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const query = listQuerySchema.parse(req.query);
 
       const items = await prisma.aux_CArticulos.findMany({
@@ -47,6 +48,7 @@ export function registerArticulosRoutes(router: Router) {
 
   router.get('/articulos/:id', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const id = z.string().min(1).parse(req.params.id);
       const item = await prisma.aux_CArticulos.findUnique({ where: { CA_ID: id } });
       if (!item) {

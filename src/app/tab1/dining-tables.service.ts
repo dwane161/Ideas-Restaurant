@@ -1,6 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { OrdersApiService } from '../api/orders-api.service';
 import { AuthService } from '../auth/auth.service';
+import { SettingsService, type AppClientRef } from '../settings/settings.service';
 
 export type TableStatus = 'available' | 'occupied' | 'pending' | 'cleaning';
 
@@ -18,7 +19,9 @@ export interface OrderItem {
   name: string;
   qty: number;
   unitPrice: number;
-  status?: string;
+  statusCode?: string;
+  statusLabel?: string;
+  statusColor?: string | null;
 }
 
 export interface AccountOrder {
@@ -31,6 +34,11 @@ export interface TableOrder {
   tableId: number;
   accounts: AccountOrder[];
   remoteOrderId?: string;
+}
+
+export interface TableClientInfo {
+  client: AppClientRef | null;
+  beneficiary: string;
 }
 
 export type PaymentMethod = 'percentage' | 'amounts';
@@ -79,9 +87,12 @@ export class DiningTablesService {
 
   private readonly invoicesByTableId = signal<Record<number, TableInvoice>>({});
 
+  private readonly clientsByTableId = signal<Record<number, TableClientInfo>>({});
+
   constructor(
     private readonly ordersApi: OrdersApiService,
     private readonly auth: AuthService,
+    private readonly settings: SettingsService,
   ) {}
 
   refreshOrdersFromBackend(onDone?: () => void): void {
@@ -91,6 +102,7 @@ export class DiningTablesService {
         const orders = res?.orders ?? [];
 
         const nextOrders: Record<number, TableOrder> = {};
+        const nextClients: Record<number, TableClientInfo> = {};
         for (const order of orders) {
           nextOrders[order.tableId] = {
             tableId: order.tableId,
@@ -103,13 +115,27 @@ export class DiningTablesService {
                 name: i.name,
                 qty: i.qty,
                 unitPrice: i.unitPrice,
-                status: i.status,
+                statusCode: i.statusCode ?? i.status ?? undefined,
+                statusLabel: i.statusLabel ?? i.statusCode ?? i.status ?? undefined,
+                statusColor: i.statusColor ?? null,
               })),
             })),
+          };
+
+          // Persist explicit nulls so clearing client doesn't fall back to defaults after refresh.
+          nextClients[order.tableId] = {
+            client: order.clientId
+              ? {
+                  id: String(order.clientId),
+                  name: String(order.clientName ?? order.clientId),
+                }
+              : null,
+            beneficiary: String(order.beneficiary ?? ''),
           };
         }
 
         this.ordersByTableId.set(nextOrders);
+        this.clientsByTableId.set(nextClients);
 
         this.tables.update((tables) =>
           tables.map((t) => {
@@ -118,13 +144,19 @@ export class DiningTablesService {
               return { ...t, status: 'available', total: undefined, elapsed: undefined };
             }
             const total = this.computeOrderTotal(order);
-            const remoteStatus = orders.find((o) => o.tableId === t.id)?.status;
+            const remote = orders.find((o) => o.tableId === t.id);
+            const statusFromCatalog = (remote?.tableStatus ?? '').trim().toLowerCase();
             const status =
-              remoteStatus === 'paid'
-                ? 'pending'
-                : remoteStatus === 'cleaning'
-                  ? 'cleaning'
-                  : 'occupied';
+              statusFromCatalog === 'available' ||
+              statusFromCatalog === 'occupied' ||
+              statusFromCatalog === 'pending' ||
+              statusFromCatalog === 'cleaning'
+                ? (statusFromCatalog as TableStatus)
+                : remote?.status === 'paid'
+                  ? 'pending'
+                  : remote?.status === 'cleaning'
+                    ? 'cleaning'
+                    : 'occupied';
             return { ...t, status, total };
           }),
         );
@@ -175,6 +207,7 @@ export class DiningTablesService {
     );
 
     this.hydrateOrderFromBackend(tableId);
+    this.applyDefaultClientIfMissing(tableId);
   }
 
   getTable(tableId: number): DiningTable | undefined {
@@ -187,6 +220,41 @@ export class DiningTablesService {
 
   getInvoice(tableId: number): TableInvoice | undefined {
     return this.invoicesByTableId()[tableId];
+  }
+
+  getClientInfo(tableId: number): TableClientInfo {
+    return (
+      this.clientsByTableId()[tableId] ?? {
+        client: this.settings.settings().defaultClient,
+        beneficiary: '',
+      }
+    );
+  }
+
+  setClientInfo(tableId: number, info: TableClientInfo): void {
+    this.clientsByTableId.update((cur) => ({ ...cur, [tableId]: info }));
+
+    const remoteOrderId = this.ordersByTableId()[tableId]?.remoteOrderId;
+    if (!remoteOrderId) return;
+
+    this.ordersApi
+      .setOrderClient(remoteOrderId, {
+        clientId: info.client?.id ?? null,
+        clientName: info.client?.name ?? null,
+        beneficiary: info.beneficiary || null,
+      })
+      .subscribe({ error: () => {} });
+  }
+
+  clearClientInfo(tableId: number): void {
+    // Keep an explicit entry so we don't fall back to default client again.
+    this.clientsByTableId.update((cur) => ({ ...cur, [tableId]: { client: null, beneficiary: '' } }));
+
+    const remoteOrderId = this.ordersByTableId()[tableId]?.remoteOrderId;
+    if (!remoteOrderId) return;
+    this.ordersApi
+      .setOrderClient(remoteOrderId, { clientId: null, clientName: null, beneficiary: null })
+      .subscribe({ error: () => {} });
   }
 
   private accountIdForIndex(index: number): string {
@@ -235,12 +303,19 @@ export class DiningTablesService {
       },
     }));
 
+    this.applyDefaultClientIfMissing(tableId);
+
+    const clientInfo = this.getClientInfo(tableId);
+
     this.ordersApi
       .openOrder({
         tableId,
         billingMode,
         accountNames: billingMode === 'shared' ? normalizedNames : undefined,
         createdByUserId: this.auth.user()?.id ?? undefined,
+        clientId: clientInfo.client?.id ?? undefined,
+        clientName: clientInfo.client?.name ?? undefined,
+        beneficiary: clientInfo.beneficiary || undefined,
       })
       .subscribe({
         next: (res) => {
@@ -254,6 +329,16 @@ export class DiningTablesService {
               [tableId]: { ...order, remoteOrderId },
             };
           });
+
+          // Ensure client selection is persisted even if user changed it before remoteOrderId existed.
+          const clientInfo = this.getClientInfo(tableId);
+          this.ordersApi
+            .setOrderClient(remoteOrderId, {
+              clientId: clientInfo.client?.id ?? null,
+              clientName: clientInfo.client?.name ?? null,
+              beneficiary: clientInfo.beneficiary || null,
+            })
+            .subscribe({ error: () => {} });
         },
         error: () => {},
       });
@@ -278,7 +363,16 @@ export class DiningTablesService {
         if (!existingItem) {
           return {
             ...account,
-            items: [...account.items, { ...item, qty: Math.max(1, qtyDelta), status: 'pending' }],
+            items: [
+              ...account.items,
+              {
+                ...item,
+                qty: Math.max(1, qtyDelta),
+                statusCode: 'pending',
+                statusLabel: 'PENDIENTE',
+                statusColor: null,
+              },
+            ],
           };
         }
 
@@ -416,9 +510,28 @@ export class DiningTablesService {
       return rest;
     });
 
+    // Fully remove explicit entry when table is reset.
+    this.clientsByTableId.update((cur) => {
+      if (!cur[tableId]) return cur;
+      const { [tableId]: _removed, ...rest } = cur;
+      return rest;
+    });
+
     if (remoteOrderId) {
       this.ordersApi.setOrderStatus(remoteOrderId, 'closed').subscribe({ error: () => {} });
     }
+  }
+
+  private applyDefaultClientIfMissing(tableId: number): void {
+    const existing = this.clientsByTableId()[tableId];
+    // If we already have an explicit entry (even null), don't override it.
+    if (existing) return;
+    const defaults = this.settings.settings();
+    if (!defaults.defaultClient) return;
+    this.setClientInfo(tableId, {
+      client: defaults.defaultClient,
+      beneficiary: '',
+    });
   }
 
   private hydrateOrderFromBackend(tableId: number): void {
@@ -443,11 +556,20 @@ export class DiningTablesService {
                 name: i.name,
                 qty: i.qty,
                 unitPrice: i.unitPrice,
-                status: i.status,
+                statusCode: i.statusCode ?? i.status ?? undefined,
+                statusLabel: i.statusLabel ?? i.statusCode ?? i.status ?? undefined,
+                statusColor: i.statusColor ?? null,
               })),
             })),
           },
         }));
+
+        this.setClientInfo(tableId, {
+          client: remote.clientId
+            ? { id: String(remote.clientId), name: String(remote.clientName ?? remote.clientId) }
+            : null,
+          beneficiary: String(remote.beneficiary ?? ''),
+        });
 
         this.tables.update((tables) =>
           tables.map((t) =>

@@ -1,5 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Necesario porque el despliegue en Site4Now/HostBuddy corre en Windows,
+  // pero el generate se hace desde macOS (darwin-arm64).
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -6614,6 +6617,9 @@ model AppOrder {
   tableId     Int
   status      String   @default("open") @db.NVarChar(20)
   billingMode String   @db.NVarChar(20)
+  clientId    String?  @db.NVarChar(20) // Maint_Clientes.Cliente_Id
+  clientName  String?  @db.NVarChar(80)
+  beneficiary String?  @db.NVarChar(100)
   createdByUserId String? @db.NVarChar(20) // Maint_Users.User_Id
   createdAt   DateTime @default(now()) @db.DateTime
   updatedAt   DateTime @updatedAt @db.DateTime
@@ -6663,6 +6669,17 @@ model AppOrderItem {
   @@map("App_OrderItems")
 }
 
+// Catalog table for order item statuses (drives labels/colors in the app).
+model AppOrderItemStatus {
+  code      String  @id @db.NVarChar(20) // e.g. "pending" | "in_progress" | "completed"
+  label     String  @db.NVarChar(50)
+  color     String? @db.NVarChar(20)
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  @@map("App_OrderItemStatuses")
+}
+
 model AppInvoice {
   id        String   @id @default(uuid()) @db.UniqueIdentifier
   orderId   String   @db.UniqueIdentifier
@@ -6691,4 +6708,26 @@ model AppInvoiceSplit {
   @@index([invoiceId])
   @@index([accountId])
   @@map("App_InvoiceSplits")
+}
+
+// Catalog table for order statuses (drives labels/colors in the app).
+model AppOrderStatus {
+  code        String  @id @db.NVarChar(20) // "open" | "paid" | "cleaning" | "closed"
+  label       String  @db.NVarChar(50) // Display label
+  tableStatus String  @db.NVarChar(20) // "occupied" | "pending" | "cleaning" | "available"
+  color       String? @db.NVarChar(20)
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  @@map("App_OrderStatuses")
+}
+
+// Key/value settings used by the backend and app (default client, images folder, etc).
+model AppSetting {
+  key       String   @id @map("SettingKey") @db.NVarChar(100)
+  value     String?  @map("SettingValue") @db.NVarChar(Max)
+  createdAt DateTime @default(now()) @map("CreatedAt") @db.DateTime
+  updatedAt DateTime @updatedAt @map("UpdatedAt") @db.DateTime
+
+  @@map("App_Settings")
 }

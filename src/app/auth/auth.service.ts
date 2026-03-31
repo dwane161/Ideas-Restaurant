@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { environment } from '../../environments/environment';
 import { Observable, tap } from 'rxjs';
+import { SettingsService } from '../settings/settings.service';
 
 export interface AuthUser {
   id: string;
@@ -14,7 +14,10 @@ export class AuthService {
 
   readonly user = signal<AuthUser | null>(null);
 
-  constructor(private readonly http: HttpClient) {
+  constructor(
+    private readonly http: HttpClient,
+    private readonly settings: SettingsService,
+  ) {
     this.hydrate();
   }
 
@@ -41,7 +44,7 @@ export class AuthService {
 
   loginWithPin(pin: string): Observable<{ user: AuthUser }> {
     return this.http
-      .post<{ user: AuthUser }>(`${environment.apiBaseUrl}/auth/login`, { pin })
+      .post<{ user: AuthUser }>(`${this.settings.apiBaseUrl()}/auth/login`, { pin })
       .pipe(
         tap((res) => {
           if (!res?.user) return;
@@ -56,4 +59,3 @@ export class AuthService {
     this.persist(null);
   }
 }
-

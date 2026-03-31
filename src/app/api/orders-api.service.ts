@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { environment } from '../../environments/environment';
+import { SettingsService } from '../settings/settings.service';
 
 export type BillingMode = 'single' | 'shared';
 export type PaymentMethod = 'percentage' | 'amounts';
@@ -11,6 +11,9 @@ export interface OpenOrderRequest {
   billingMode: BillingMode;
   accountNames?: string[];
   createdByUserId?: string;
+  clientId?: string;
+  clientName?: string;
+  beneficiary?: string;
 }
 
 export interface OpenOrderResponse {
@@ -41,11 +44,27 @@ export interface RemoteOrder {
   id: string;
   tableId: number;
   status: string;
+  statusLabel?: string;
+  tableStatus?: string | null;
+  statusColor?: string | null;
+  clientId?: string | null;
+  clientName?: string | null;
+  beneficiary?: string | null;
   billingMode: BillingMode;
   accounts: Array<{
     key: string;
     name: string;
-    items: Array<{ id: string; name: string; qty: number; unitPrice: number; status?: string }>;
+    items: Array<{
+      id: string;
+      name: string;
+      qty: number;
+      unitPrice: number;
+      statusCode?: string;
+      statusLabel?: string;
+      statusColor?: string | null;
+      // Back-compat (older backend)
+      status?: string;
+    }>;
   }>;
 }
 
@@ -59,31 +78,38 @@ export interface ListOrdersResponse {
 
 @Injectable({ providedIn: 'root' })
 export class OrdersApiService {
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly settings: SettingsService,
+  ) {}
 
   openOrder(body: OpenOrderRequest): Observable<OpenOrderResponse> {
-    return this.http.post<OpenOrderResponse>(`${environment.apiBaseUrl}/orders/open`, body);
+    return this.http.post<OpenOrderResponse>(`${this.settings.apiBaseUrl()}/orders/open`, body);
   }
 
   addItem(orderId: string, body: AddItemRequest): Observable<unknown> {
-    return this.http.post(`${environment.apiBaseUrl}/orders/${orderId}/items`, body);
+    return this.http.post(`${this.settings.apiBaseUrl()}/orders/${orderId}/items`, body);
   }
 
   pay(orderId: string, body: PayRequest): Observable<unknown> {
-    return this.http.post(`${environment.apiBaseUrl}/orders/${orderId}/pay`, body);
+    return this.http.post(`${this.settings.apiBaseUrl()}/orders/${orderId}/pay`, body);
   }
 
   getOrderByTable(tableId: number, status?: string): Observable<GetOrderByTableResponse> {
     const params = status ? { status } : undefined;
-    return this.http.get<GetOrderByTableResponse>(`${environment.apiBaseUrl}/orders/by-table/${tableId}`, { params });
+    return this.http.get<GetOrderByTableResponse>(`${this.settings.apiBaseUrl()}/orders/by-table/${tableId}`, { params });
   }
 
   listOrders(status?: string): Observable<ListOrdersResponse> {
     const params = status ? { status } : undefined;
-    return this.http.get<ListOrdersResponse>(`${environment.apiBaseUrl}/orders`, { params });
+    return this.http.get<ListOrdersResponse>(`${this.settings.apiBaseUrl()}/orders`, { params });
   }
 
   setOrderStatus(orderId: string, status: 'open' | 'paid' | 'cleaning' | 'closed'): Observable<unknown> {
-    return this.http.patch(`${environment.apiBaseUrl}/orders/${orderId}/status`, { status });
+    return this.http.patch(`${this.settings.apiBaseUrl()}/orders/${orderId}/status`, { status });
+  }
+
+  setOrderClient(orderId: string, body: { clientId: string | null; clientName: string | null; beneficiary: string | null }): Observable<unknown> {
+    return this.http.patch(`${this.settings.apiBaseUrl()}/orders/${orderId}/client`, body);
   }
 }

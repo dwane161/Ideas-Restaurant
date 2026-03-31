@@ -1,6 +1,6 @@
 import type { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../prisma.js';
+import { getPrisma } from '../prisma.js';
 
 const loginSchema = z.object({
   pin: z.string().min(1)
@@ -9,6 +9,7 @@ const loginSchema = z.object({
 export function registerAuthRoutes(router: Router) {
   router.post('/auth/login', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const { pin } = loginSchema.parse(req.body);
       const normalizedPin = pin.trim();
 

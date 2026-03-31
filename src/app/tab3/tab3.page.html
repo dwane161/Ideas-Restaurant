@@ -6,6 +6,14 @@
 
 <ion-content [fullscreen]="true" class="settings-page">
   <div class="container">
+    <section class="card" *ngIf="remoteError() as err">
+      <div class="card-title">Estado</div>
+      <div class="row">
+        <div class="label">Sync</div>
+        <div class="value">{{ err }}</div>
+      </div>
+    </section>
+
     <section class="card">
       <div class="card-title">Perfil</div>
       <div class="row" *ngIf="user() as u; else noUser">
@@ -26,6 +34,14 @@
         <div class="label">API</div>
         <div class="value mono">{{ apiBaseUrl }}</div>
       </div>
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">URL API</ion-label>
+        <ion-input
+          [value]="settings().apiBaseUrl"
+          placeholder="https://tu-dominio.com/api"
+          (ionChange)="setApiBaseUrl($event.detail.value)"
+        ></ion-input>
+      </ion-item>
       <div class="row">
         <div class="label">Estado API</div>
         <div class="value">{{ apiStatus() }}</div>
@@ -38,6 +54,131 @@
       <ion-button expand="block" fill="outline" [disabled]="isTesting()" (click)="testConnections()">
         Probar conexión
       </ion-button>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Imágenes</div>
+
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">Base URL</ion-label>
+        <ion-input
+          [value]="imagesBaseUrlInput()"
+          placeholder="https://tu-dominio.com/images"
+          (ionChange)="setImagesBaseUrl($event.detail.value)"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">Carpeta (servidor)</ion-label>
+        <ion-input
+          [value]="imagesFolderInput()"
+          placeholder="C:\\images o /var/www/images"
+          (ionChange)="setImagesFolder($event.detail.value)"
+        ></ion-input>
+      </ion-item>
+
+      <ion-button
+        expand="block"
+        fill="outline"
+        [disabled]="isRemoteLoading()"
+        (click)="saveImagesConfig()"
+      >
+        Guardar imágenes
+      </ion-button>
+    </section>
+
+    <section class="card">
+      <div class="card-title">BD backend</div>
+
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">Server</ion-label>
+        <ion-input
+          [value]="backendDbServerInput()"
+          placeholder="SQL5106.site4now.net"
+          (ionChange)="setBackendDbServer($event.detail.value)"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">Database</ion-label>
+        <ion-input
+          [value]="backendDbDatabaseInput()"
+          placeholder="db_xxx"
+          (ionChange)="setBackendDbDatabase($event.detail.value)"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">User</ion-label>
+        <ion-input
+          [value]="backendDbUserInput()"
+          placeholder="usuario"
+          (ionChange)="setBackendDbUser($event.detail.value)"
+        ></ion-input>
+      </ion-item>
+
+      <ion-button
+        expand="block"
+        fill="outline"
+        [disabled]="isRemoteLoading()"
+        (click)="saveBackendDbConfig()"
+      >
+        Guardar BD
+      </ion-button>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Cliente por defecto</div>
+      <div class="row">
+        <div class="label">Actual</div>
+        <div class="value">
+          <ng-container *ngIf="settings().defaultClient as dc; else noDefaultClient">
+            {{ dc.name }} ({{ dc.id }})
+          </ng-container>
+          <ng-template #noDefaultClient>—</ng-template>
+        </div>
+      </div>
+
+      <ion-button
+        expand="block"
+        fill="outline"
+        color="medium"
+        [disabled]="!settings().defaultClient"
+        (click)="clearDefaultClient()"
+      >
+        Quitar cliente por defecto
+      </ion-button>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Clientes</div>
+
+      <ion-item lines="none" class="input-row">
+        <ion-label position="stacked">Buscar</ion-label>
+        <ion-input
+          [value]="clientQuery()"
+          placeholder="Nombre o ID"
+          (ionChange)="setClientQuery($event.detail.value)"
+        ></ion-input>
+      </ion-item>
+
+      <ion-button expand="block" fill="outline" [disabled]="isClientsLoading()" (click)="searchClientes()">
+        Buscar clientes
+      </ion-button>
+
+      <div class="empty-state" *ngIf="clients().length === 0">
+        No hay resultados.
+      </div>
+
+      <ion-list *ngIf="clients().length > 0">
+        <ion-item button detail="false" *ngFor="let c of clients()" (click)="setDefaultClient(c)">
+          <ion-label>
+            <div>{{ c.name }}</div>
+            <div class="mono small">{{ c.id }}</div>
+          </ion-label>
+          <ion-badge slot="end" color="medium">Por defecto</ion-badge>
+        </ion-item>
+      </ion-list>
     </section>
 
     <section class="card">

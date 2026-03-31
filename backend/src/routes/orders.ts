@@ -1,6 +1,6 @@
 import type { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../prisma.js';
+import { getPrisma } from '../prisma.js';
 
 type BillingMode = 'single' | 'shared';
 
@@ -28,7 +28,10 @@ const openOrderSchema = z.object({
   tableId: z.number().int().positive(),
   billingMode: z.enum(['single', 'shared']),
   accountNames: z.array(z.string()).optional(),
-  createdByUserId: z.string().min(1).optional()
+  createdByUserId: z.string().min(1).optional(),
+  clientId: z.string().min(1).optional(),
+  clientName: z.string().min(1).optional(),
+  beneficiary: z.string().optional()
 });
 
 const addItemSchema = z.object({
@@ -53,8 +56,39 @@ const paySchema = z.object({
 });
 
 export function registerOrdersRoutes(router: Router) {
+  const loadStatusMap = async (
+    prisma: Awaited<ReturnType<typeof getPrisma>>,
+  ): Promise<Map<string, { label: string; tableStatus: string; color: string | null }>> => {
+    try {
+      const rows = await prisma.appOrderStatus.findMany({
+        where: { isActive: true },
+        select: { code: true, label: true, tableStatus: true, color: true }
+      });
+      return new Map(rows.map((r: { code: string; label: string; tableStatus: string; color: string | null }) => [r.code, { label: r.label, tableStatus: r.tableStatus, color: r.color }]));
+    } catch {
+      return new Map();
+    }
+  };
+
+  const loadItemStatusMap = async (
+    prisma: Awaited<ReturnType<typeof getPrisma>>,
+  ): Promise<Map<string, { label: string; color: string | null }>> => {
+    try {
+      const rows = await prisma.appOrderItemStatus.findMany({
+        where: { isActive: true },
+        select: { code: true, label: true, color: true }
+      });
+      return new Map(rows.map((r: { code: string; label: string; color: string | null }) => [r.code, { label: r.label, color: r.color }]));
+    } catch {
+      return new Map();
+    }
+  };
+
   router.get('/orders', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
+      const statusMap = await loadStatusMap(prisma);
+      const itemStatusMap = await loadItemStatusMap(prisma);
       const statusRaw = z.string().min(1).optional().parse(req.query.status);
       const statuses = statusRaw
         ? statusRaw
@@ -84,7 +118,9 @@ export function registerOrdersRoutes(router: Router) {
             name: string;
             qty: number;
             unitPrice: number;
-            status: string;
+            statusCode: string;
+            statusLabel: string;
+            statusColor: string | null;
           }>
         }));
 
@@ -97,12 +133,15 @@ export function registerOrdersRoutes(router: Router) {
           const idx = accountIndex.get(item.accountId);
           if (idx === undefined) continue;
           const unitPrice = Number(item.unitPrice);
+          const meta = itemStatusMap.get(item.itemStatus) ?? null;
           accounts[idx].items.push({
             id: item.productId,
             name: item.productName,
             qty: item.qty,
             unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
-            status: item.itemStatus
+            statusCode: item.itemStatus,
+            statusLabel: meta?.label ?? item.itemStatus,
+            statusColor: meta?.color ?? null
           });
         }
 
@@ -110,6 +149,12 @@ export function registerOrdersRoutes(router: Router) {
           id: order.id,
           tableId: order.tableId,
           status: order.status,
+          statusLabel: statusMap.get(order.status)?.label ?? order.status,
+          tableStatus: statusMap.get(order.status)?.tableStatus ?? null,
+          statusColor: statusMap.get(order.status)?.color ?? null,
+          clientId: order.clientId,
+          clientName: order.clientName,
+          beneficiary: order.beneficiary,
           billingMode: order.billingMode,
           accounts
         };
@@ -123,6 +168,7 @@ export function registerOrdersRoutes(router: Router) {
 
   router.patch('/orders/:orderId/status', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const orderId = z.string().uuid().parse(req.params.orderId);
       const payload = z
         .object({
@@ -161,6 +207,7 @@ export function registerOrdersRoutes(router: Router) {
 
   router.post('/orders/open', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const payload = openOrderSchema.parse(req.body);
 
       const billingMode: BillingMode = payload.billingMode;
@@ -186,6 +233,9 @@ export function registerOrdersRoutes(router: Router) {
           billingMode: payload.billingMode,
           status: 'open',
           createdByUserId: payload.createdByUserId ?? null,
+          clientId: payload.clientId ?? null,
+          clientName: payload.clientName ?? null,
+          beneficiary: payload.beneficiary ?? null,
           accounts: {
             create: accounts.map((a) => ({ key: a.key, name: a.name }))
           }
@@ -198,6 +248,9 @@ export function registerOrdersRoutes(router: Router) {
           id: order.id,
           tableId: order.tableId,
           status: order.status,
+          clientId: order.clientId,
+          clientName: order.clientName,
+          beneficiary: order.beneficiary,
           billingMode: order.billingMode,
           createdByUserId: order.createdByUserId,
           accounts: order.accounts.map((a) => ({ key: a.key, name: a.name }))
@@ -208,8 +261,45 @@ export function registerOrdersRoutes(router: Router) {
     }
   });
 
+  router.patch('/orders/:orderId/client', async (req, res, next) => {
+    try {
+      const prisma = await getPrisma();
+      const orderId = z.string().uuid().parse(req.params.orderId);
+      const payload = z
+        .object({
+          clientId: z.string().min(1).nullable().optional(),
+          clientName: z.string().min(1).nullable().optional(),
+          beneficiary: z.string().nullable().optional()
+        })
+        .parse(req.body);
+
+      const order = await prisma.appOrder.update({
+        where: { id: orderId },
+        data: {
+          clientId: payload.clientId ?? null,
+          clientName: payload.clientName ?? null,
+          beneficiary: payload.beneficiary ?? null
+        }
+      });
+
+      res.json({
+        order: {
+          id: order.id,
+          clientId: order.clientId,
+          clientName: order.clientName,
+          beneficiary: order.beneficiary
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/orders/by-table/:tableId', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
+      const statusMap = await loadStatusMap(prisma);
+      const itemStatusMap = await loadItemStatusMap(prisma);
       const tableId = z.coerce.number().int().positive().parse(req.params.tableId);
       const statusRaw = z.string().min(1).optional().parse(req.query.status);
       const statuses = statusRaw
@@ -245,7 +335,9 @@ export function registerOrdersRoutes(router: Router) {
           name: string;
           qty: number;
           unitPrice: number;
-          status: string;
+          statusCode: string;
+          statusLabel: string;
+          statusColor: string | null;
         }>
       }));
 
@@ -258,12 +350,15 @@ export function registerOrdersRoutes(router: Router) {
         const idx = accountIndex.get(item.accountId);
         if (idx === undefined) continue;
         const unitPrice = Number(item.unitPrice);
+        const meta = itemStatusMap.get(item.itemStatus) ?? null;
         accounts[idx].items.push({
           id: item.productId,
           name: item.productName,
           qty: item.qty,
           unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
-          status: item.itemStatus
+          statusCode: item.itemStatus,
+          statusLabel: meta?.label ?? item.itemStatus,
+          statusColor: meta?.color ?? null
         });
       }
 
@@ -272,6 +367,12 @@ export function registerOrdersRoutes(router: Router) {
           id: order.id,
           tableId: order.tableId,
           status: order.status,
+          statusLabel: statusMap.get(order.status)?.label ?? order.status,
+          tableStatus: statusMap.get(order.status)?.tableStatus ?? null,
+          statusColor: statusMap.get(order.status)?.color ?? null,
+          clientId: order.clientId,
+          clientName: order.clientName,
+          beneficiary: order.beneficiary,
           billingMode: order.billingMode,
           accounts
         }
@@ -283,6 +384,7 @@ export function registerOrdersRoutes(router: Router) {
 
   router.post('/orders/:orderId/items', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const orderId = z.string().uuid().parse(req.params.orderId);
       const payload = addItemSchema.parse(req.body);
 
@@ -352,6 +454,7 @@ export function registerOrdersRoutes(router: Router) {
 
   router.post('/orders/:orderId/pay', async (req, res, next) => {
     try {
+      const prisma = await getPrisma();
       const orderId = z.string().uuid().parse(req.params.orderId);
       const payload = paySchema.parse(req.body);
 

@@ -1,12 +1,15 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController } from '@ionic/angular';
+import { firstValueFrom } from 'rxjs';
 import {
   DiningTablesService,
   type PaymentMethod,
   type PaymentSplit,
   type TableOrder,
 } from '../dining-tables.service';
+import { ClientesApiService } from '../../api/clientes-api.service';
+import { SettingsService } from '../../settings/settings.service';
 
 @Component({
   selector: 'app-table-payment',
@@ -19,6 +22,8 @@ export class TablePaymentPage {
   private readonly router = inject(Router);
   private readonly alertController = inject(AlertController);
   private readonly tablesService = inject(DiningTablesService);
+  private readonly clientesApi = inject(ClientesApiService);
+  private readonly settingsService = inject(SettingsService);
 
   private readonly tableId = Number(this.route.snapshot.paramMap.get('id'));
 
@@ -29,6 +34,9 @@ export class TablePaymentPage {
   readonly order = computed<TableOrder | undefined>(() =>
     this.tablesService.getOrder(this.tableId),
   );
+
+  readonly clientInfo = computed(() => this.tablesService.getClientInfo(this.tableId));
+  private beneficiaryPrompted = false;
 
   readonly canCobrar = computed<boolean>(() => {
     const order = this.order();
@@ -87,6 +95,81 @@ export class TablePaymentPage {
     if (this.amountInputs().length !== count) {
       this.amountInputs.set(Array.from({ length: count }, () => '0'));
     }
+
+    const info = this.tablesService.getClientInfo(this.tableId);
+    if (info.client && !info.beneficiary && !this.beneficiaryPrompted) {
+      this.beneficiaryPrompted = true;
+      void this.promptBeneficiary();
+    }
+  }
+
+  async elegirCliente(): Promise<void> {
+    const search = await this.alertController.create({
+      header: 'Buscar cliente',
+      inputs: [{ name: 'q', type: 'text', placeholder: 'Nombre o ID' }],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Buscar', role: 'confirm' },
+      ],
+    });
+    await search.present();
+    const searchResult = await search.onDidDismiss();
+    if (searchResult.role !== 'confirm') return;
+
+    const q = String(searchResult.data?.values?.q ?? '').trim();
+    const res = await firstValueFrom(this.clientesApi.listClientes({ q, take: 20 }));
+    const clientes = res?.clientes ?? [];
+    if (clientes.length === 0) {
+      const alert = await this.alertController.create({
+        header: 'Sin resultados',
+        message: 'No se encontraron clientes.',
+        buttons: ['OK'],
+      });
+      await alert.present();
+      return;
+    }
+
+    const picker = await this.alertController.create({
+      header: 'Seleccionar cliente',
+      inputs: clientes.map((c) => ({
+        type: 'radio',
+        name: 'cliente',
+        label: `${c.name} (${c.id})`,
+        value: c.id,
+      })),
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Seleccionar', role: 'confirm' },
+      ],
+    });
+    await picker.present();
+    const pickResult = await picker.onDidDismiss();
+    if (pickResult.role !== 'confirm') return;
+
+    const selectedId = String(pickResult.data?.values ?? pickResult.data ?? '').trim();
+    const selected = clientes.find((c) => c.id === selectedId) ?? clientes[0];
+
+    this.tablesService.setClientInfo(this.tableId, { client: selected, beneficiary: '' });
+    await this.promptBeneficiary();
+
+    const makeDefault = await this.alertController.create({
+      header: 'Cliente por defecto',
+      message: '¿Quieres guardar este cliente como por defecto?',
+      buttons: [
+        { text: 'No', role: 'cancel' },
+        { text: 'Sí', role: 'confirm' },
+      ],
+    });
+    await makeDefault.present();
+    const defResult = await makeDefault.onDidDismiss();
+    if (defResult.role !== 'confirm') return;
+    void this.settingsService
+      .setDefaultClient({ id: selected.id, name: selected.name })
+      .catch(() => {});
+  }
+
+  quitarCliente(): void {
+    this.tablesService.clearClientInfo(this.tableId);
   }
 
   setMethod(value: unknown): void {
@@ -127,6 +210,13 @@ export class TablePaymentPage {
   async confirmPayment(): Promise<void> {
     const order = this.order();
     if (!order) return;
+
+    const info = this.tablesService.getClientInfo(this.tableId);
+    if (info.client && !info.beneficiary) {
+      await this.promptBeneficiary();
+      const next = this.tablesService.getClientInfo(this.tableId);
+      if (!next.beneficiary) return;
+    }
 
     if (!this.canCobrar()) {
       const alert = await this.alertController.create({
@@ -215,7 +305,7 @@ export class TablePaymentPage {
         if (item.qty > 0) items.push(item);
       }
     }
-    return items.length > 0 && items.every((item) => this.isItemCompleted(item.status));
+    return items.length > 0 && items.every((item) => this.isItemCompleted(item.statusCode));
   }
 
   private parseNumber(value: unknown): number {
@@ -223,5 +313,25 @@ export class TablePaymentPage {
     const normalized = raw.replace(',', '.');
     const num = Number(normalized);
     return Number.isFinite(num) ? num : 0;
+  }
+
+  private async promptBeneficiary(): Promise<void> {
+    const info = this.tablesService.getClientInfo(this.tableId);
+    if (!info.client) return;
+
+    const beneficiary = await this.alertController.create({
+      header: 'Beneficiario',
+      message: 'Indica el beneficiario para esta orden.',
+      inputs: [{ name: 'beneficiary', type: 'text', placeholder: 'Beneficiario', value: info.beneficiary ?? '' }],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Guardar', role: 'confirm' },
+      ],
+    });
+    await beneficiary.present();
+    const benResult = await beneficiary.onDidDismiss();
+    if (benResult.role !== 'confirm') return;
+    const value = String(benResult.data?.values?.beneficiary ?? '').trim();
+    this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: value });
   }
 }

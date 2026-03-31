@@ -44,6 +44,50 @@
   color: var(--color-text-secondary);
 }
 
+.client-card {
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.65);
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.client-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.client-row + .client-row {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.client-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--color-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.client-value {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0d3d40;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-actions {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
 .split-panel {
   margin-top: 12px;
 }

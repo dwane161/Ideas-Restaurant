@@ -113,6 +113,22 @@
         </p>
 
         <ng-container *ngIf="order() as o; else emptyOrder">
+          <div class="client-card">
+            <div class="client-row">
+              <div class="client-label">Cliente</div>
+              <div class="client-value">
+                <ng-container *ngIf="clientInfo().client as c; else noClient">
+                  {{ c.name }} ({{ c.id }})
+                </ng-container>
+                <ng-template #noClient>—</ng-template>
+              </div>
+            </div>
+            <div class="client-row">
+              <div class="client-label">Beneficiario</div>
+              <div class="client-value">{{ clientInfo().beneficiary || '—' }}</div>
+            </div>
+          </div>
+
           <div class="accounts">
             <article *ngFor="let account of o.accounts" class="account-card">
               <header class="account-head">
@@ -133,8 +149,12 @@
                     <div class="item-meta">
                       {{ item.qty }} × ${{ item.unitPrice | number:'1.2-2' }}
                     </div>
-                    <div *ngIf="item.status" class="item-status">
-                      {{ item.status }}
+                    <div
+                      *ngIf="item.statusCode || item.statusLabel"
+                      class="item-status"
+                      [ngClass]="itemStatusClass(item.statusCode)"
+                    >
+                      {{ item.statusLabel || item.statusCode }}
                     </div>
                   </div>
                   <div class="item-line">
@@ -153,12 +173,31 @@
           </div>
 
           <div class="actions">
+            <button type="button" class="ghost-btn" (click)="elegirCliente()">
+              Elegir cliente
+            </button>
+            <button
+              type="button"
+              class="ghost-btn"
+              [disabled]="!clientInfo().client"
+              (click)="quitarCliente()"
+            >
+              Quitar cliente
+            </button>
             <button
               type="button"
               class="ghost-btn"
               (click)="irAMenu()"
             >
               Agregar productos
+            </button>
+            <button
+              type="button"
+              class="ghost-btn"
+              [disabled]="!orderHasItems(o)"
+              (click)="imprimirOrden()"
+            >
+              Imprimir orden
             </button>
             <button
               type="button"
