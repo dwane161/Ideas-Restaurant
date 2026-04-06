@@ -63,6 +63,9 @@
                   <div class="item-meta">
                     {{ item.qty }} × ${{ item.unitPrice | number:'1.2-2' }}
                   </div>
+                  <div *ngIf="item.note" class="item-meta">
+                    {{ item.note }}
+                  </div>
                 </div>
                 <div class="item-line">
                   ${{ (item.qty * item.unitPrice) | number:'1.2-2' }}
@@ -75,6 +78,10 @@
 
       <button type="button" class="primary-btn" (click)="close()">
         Finalizar
+      </button>
+
+      <button type="button" class="ghost-btn" (click)="imprimirFactura()">
+        Imprimir factura
       </button>
     </ng-container>
 

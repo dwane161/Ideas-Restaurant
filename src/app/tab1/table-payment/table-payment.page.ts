@@ -82,7 +82,11 @@ export class TablePaymentPage {
     if (!order) return;
 
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary && !this.beneficiaryPrompted) {
+    if (!info.beneficiary && order.accounts.length > 1) {
+      this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
+      return;
+    }
+    if (!info.beneficiary && !this.beneficiaryPrompted) {
       this.beneficiaryPrompted = true;
       void this.promptBeneficiary();
     }
@@ -162,7 +166,10 @@ export class TablePaymentPage {
     if (!order) return;
 
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary) {
+    if (!info.beneficiary && order.accounts.length > 1) {
+      this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
+    }
+    if (!info.beneficiary) {
       await this.promptBeneficiary();
       const next = this.tablesService.getClientInfo(this.tableId);
       if (!next.beneficiary) return;
@@ -170,9 +177,9 @@ export class TablePaymentPage {
 
     if (!this.canCobrar()) {
       const alert = await this.alertController.create({
-        header: 'No se puede cobrar',
+        header: 'No se puede cerrar la orden',
         message:
-          'Solo se puede cobrar cuando la orden tiene items y todos están en estado COMPLETED.',
+          'Solo se puede cerrar la orden cuando tiene items y todos están en estado COMPLETED.',
         buttons: ['OK'],
       });
       await alert.present();
@@ -196,11 +203,11 @@ export class TablePaymentPage {
           }));
 
     const confirm = await this.alertController.create({
-      header: 'Confirmar cobro',
+      header: 'Cerrar orden',
       message: `Total: $${total.toFixed(2)}`,
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Cobrar', role: 'confirm' },
+        { text: 'Cerrar', role: 'confirm' },
       ],
     });
     await confirm.present();
@@ -218,7 +225,10 @@ export class TablePaymentPage {
     if (!order) return;
 
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary) {
+    if (!info.beneficiary && order.accounts.length > 1) {
+      this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
+    }
+    if (!info.beneficiary) {
       await this.promptBeneficiary();
       const next = this.tablesService.getClientInfo(this.tableId);
       if (!next.beneficiary) return;
@@ -324,8 +334,6 @@ export class TablePaymentPage {
 
   private async promptBeneficiary(): Promise<void> {
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (!info.client) return;
-
     const beneficiary = await this.alertController.create({
       header: 'Beneficiario',
       message: 'Indica el beneficiario para esta orden.',

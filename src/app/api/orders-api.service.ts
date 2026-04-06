@@ -33,6 +33,7 @@ export interface AddItemRequest {
   productName: string;
   unitPrice: number;
   qtyDelta: number;
+  note?: string;
 }
 
 export interface PayRequest {
@@ -63,6 +64,7 @@ export interface RemoteOrder {
       statusCode?: string;
       statusLabel?: string;
       statusColor?: string | null;
+      note?: string | null;
       // Back-compat (older backend)
       status?: string;
     }>;

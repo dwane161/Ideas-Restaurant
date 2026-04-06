@@ -38,40 +38,68 @@
       <section *ngIf="t.status === 'available'" class="panel">
         <h2 class="panel-title">Abrir mesa</h2>
         <p class="panel-subtitle">
-          Selecciona cómo se manejará el pago.
+          Indica la cantidad de personas (cuentas) para esta orden.
         </p>
 
-        <div class="mode-card">
-          <ion-segment
-            [value]="billingMode()"
-            (ionChange)="setBillingMode($event.detail.value)"
-          >
-            <ion-segment-button value="single">
-              <ion-label>Cuenta única</ion-label>
-            </ion-segment-button>
-            <ion-segment-button value="shared">
-              <ion-label>Cuenta compartida</ion-label>
-            </ion-segment-button>
-          </ion-segment>
+        <div class="client-card">
+          <div class="client-row">
+            <div class="client-label">Cliente</div>
+            <div class="client-value">
+              <ng-container *ngIf="clientInfo().client as c; else noClientOpen">
+                {{ c.name }} ({{ c.id }})
+              </ng-container>
+              <ng-template #noClientOpen>—</ng-template>
+            </div>
+          </div>
+          <ng-container *ngIf="peopleCount() <= 1; else multipleBeneficiaries">
+            <div class="client-row">
+              <div class="client-label">Beneficiario</div>
+              <div class="client-value">{{ clientInfo().beneficiary || '—' }}</div>
+            </div>
+          </ng-container>
+          <ng-template #multipleBeneficiaries>
+            <div class="accounts-form">
+              <div class="accounts-title">Beneficiarios</div>
+              <ion-list class="accounts-list" lines="none">
+                <ion-item
+                  class="account-item"
+                  *ngFor="let name of accountNames(); index as i; trackBy: trackByIndex"
+                >
+                  <ion-label position="stacked">Beneficiario {{ i + 1 }}</ion-label>
+                  <ion-input
+                    [value]="name"
+                    placeholder="Nombre"
+                    inputmode="text"
+                    (ionInput)="setAccountName(i, $event.detail.value)"
+                  ></ion-input>
+                </ion-item>
+              </ion-list>
+            </div>
+          </ng-template>
 
-          <div class="mode-hint">
-            <ng-container *ngIf="billingMode() === 'shared'; else singleHint">
-              Elige la cantidad de personas y el nombre de cada cuenta (solo como referencia).
-            </ng-container>
-            <ng-template #singleHint>
-              Todos los productos se cargarán a una sola cuenta.
-            </ng-template>
+          <div class="client-actions">
+            <button type="button" class="ghost-btn" (click)="elegirCliente()">
+              Elegir cliente
+            </button>
+            <button
+              type="button"
+              class="ghost-btn"
+              [disabled]="!clientInfo().client"
+              (click)="quitarCliente()"
+            >
+              Quitar cliente
+            </button>
           </div>
         </div>
 
-        <section *ngIf="billingMode() === 'shared'" class="shared-panel" aria-label="Cuenta compartida">
+        <section class="shared-panel" aria-label="Cuentas">
           <div class="people-row">
             <div class="people-label">
               <div class="people-title">Personas</div>
-              <div class="people-subtitle">Mínimo 2 • Máximo 12</div>
+              <div class="people-subtitle">Mínimo 1 • Máximo 12</div>
             </div>
             <div class="people-stepper" aria-label="Cantidad de personas">
-              <button type="button" class="stepper-btn" (click)="decrementPeople()" [disabled]="peopleCount() <= 2">
+              <button type="button" class="stepper-btn" (click)="decrementPeople()" [disabled]="peopleCount() <= 1">
                 −
               </button>
               <div class="stepper-value">{{ peopleCount() }}</div>
@@ -79,24 +107,6 @@
                 +
               </button>
             </div>
-          </div>
-
-          <div class="accounts-form">
-            <div class="accounts-title">Nombres de cuentas</div>
-            <ion-list class="accounts-list" lines="none">
-              <ion-item
-                class="account-item"
-                *ngFor="let name of accountNames(); index as i; trackBy: trackByIndex"
-              >
-                <ion-label position="stacked">Cuenta {{ i + 1 }}</ion-label>
-                <ion-input
-                  [value]="name"
-                  placeholder="Ej: Juan, Ana, Familia..."
-                  inputmode="text"
-                  (ionInput)="setAccountName(i, $event.detail.value)"
-                ></ion-input>
-              </ion-item>
-            </ion-list>
           </div>
         </section>
 
@@ -149,6 +159,9 @@
                     <div class="item-meta">
                       {{ item.qty }} × ${{ item.unitPrice | number:'1.2-2' }}
                     </div>
+                    <div *ngIf="item.note" class="item-meta">
+                      {{ item.note }}
+                    </div>
                     <div
                       *ngIf="item.statusCode || item.statusLabel"
                       class="item-status"
@@ -173,17 +186,6 @@
           </div>
 
           <div class="actions">
-            <button type="button" class="ghost-btn" (click)="elegirCliente()">
-              Elegir cliente
-            </button>
-            <button
-              type="button"
-              class="ghost-btn"
-              [disabled]="!clientInfo().client"
-              (click)="quitarCliente()"
-            >
-              Quitar cliente
-            </button>
             <button
               type="button"
               class="ghost-btn"
@@ -197,7 +199,7 @@
               (click)="cobrar()"
               [disabled]="!canCobrar(o)"
             >
-              Cobrar
+              Cerrar orden
             </button>
           </div>
         </ng-container>

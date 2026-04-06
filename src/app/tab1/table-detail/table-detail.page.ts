@@ -30,9 +30,10 @@ export class TableDetailPage {
 
   private readonly tableId = Number(this.route.snapshot.paramMap.get('id'));
 
-  readonly billingMode = signal<BillingMode>('single');
-  readonly peopleCount = signal<number>(2);
-  readonly accountNames = signal<string[]>(['', '']);
+  // We keep "shared" as the only mode in the UI. If peopleCount is 1, it behaves like single-account.
+  readonly billingMode = signal<BillingMode>('shared');
+  readonly peopleCount = signal<number>(1);
+  readonly accountNames = signal<string[]>(['']);
 
   readonly table = computed<DiningTable | undefined>(() =>
     this.tablesService.getTable(this.tableId),
@@ -56,7 +57,16 @@ export class TableDetailPage {
     if (t?.status !== 'occupied') return;
 
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary && !this.beneficiaryPrompted) {
+    const order = this.tablesService.getOrder(this.tableId);
+    const accountCount = order?.accounts?.length ?? 0;
+
+    if (!info.beneficiary && accountCount > 1) {
+      // For shared orders, keep beneficiary implicit.
+      this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
+      return;
+    }
+
+    if (!info.beneficiary && !this.beneficiaryPrompted) {
       this.beneficiaryPrompted = true;
       void this.promptBeneficiary();
     }
@@ -71,24 +81,38 @@ export class TableDetailPage {
   }
 
   async openTable(): Promise<void> {
-    // Beneficiary must be selected when a client is present (default or manual) at the moment of opening.
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary) {
-      const ok = await this.promptBeneficiary();
-      if (!ok) return;
-      const next = this.tablesService.getClientInfo(this.tableId);
-      if (!next.beneficiary) return;
-    }
+    const count = this.clampPeopleCount(this.peopleCount());
+    // Pass empty names; backend/service will create "Cuenta 1..N".
+    const names = this.normalizeAccountNames(this.accountNames(), count);
 
-    const mode = this.billingMode();
-    if (mode === 'shared') {
-      const count = this.clampPeopleCount(this.peopleCount());
-      const names = this.normalizeAccountNames(this.accountNames(), count);
-      this.tablesService.openTable(this.tableId, 'shared', names);
-      return;
-    }
+    if (count <= 1) {
+      // Single beneficiary required.
+      if (!info.beneficiary) {
+        const ok = await this.promptBeneficiary();
+        if (!ok) return;
+        const next = this.tablesService.getClientInfo(this.tableId);
+        if (!next.beneficiary) return;
+      }
+    } else {
+      // Multiple beneficiaries: require a name for each account and auto-set order beneficiary.
+      const missing = names.some((n) => !n.trim());
+      if (missing) {
+        const alert = await this.alertController.create({
+          header: 'Beneficiarios requeridos',
+          message: 'Debes indicar el nombre de cada beneficiario para continuar.',
+          buttons: ['OK'],
+        });
+        await alert.present();
+        return;
+      }
 
-    this.tablesService.openTable(this.tableId, 'single');
+      if (!info.beneficiary) {
+        this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
+      }
+    }
+    this.tablesService.openTable(this.tableId, 'shared', names);
+    this.irAMenu();
   }
 
   async cobrar(): Promise<void> {
@@ -96,7 +120,7 @@ export class TableDetailPage {
     if (!order) return;
 
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (info.client && !info.beneficiary) {
+    if (!info.beneficiary) {
       const ok = await this.promptBeneficiary();
       if (!ok) return;
       const next = this.tablesService.getClientInfo(this.tableId);
@@ -105,10 +129,10 @@ export class TableDetailPage {
 
     if (!this.canCobrar(order)) {
       const message = this.orderHasItems(order)
-        ? 'Solo se puede cobrar cuando todos los items estén en estado COMPLETED.'
-        : 'Agrega al menos un plato antes de cobrar.';
+        ? 'Solo se puede cerrar la orden cuando todos los items estén en estado COMPLETED.'
+        : 'Agrega al menos un plato antes de cerrar la orden.';
       const alert = await this.alertController.create({
-        header: 'No se puede cobrar',
+        header: 'No se puede cerrar la orden',
         message,
         buttons: ['OK'],
       });
@@ -119,11 +143,11 @@ export class TableDetailPage {
     const total = this.orderTotal(order);
 
     const confirm = await this.alertController.create({
-      header: 'Confirmar cobro',
+      header: 'Cerrar orden',
       message: `Total: $${total.toFixed(2)}`,
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
-        { text: 'Cobrar', role: 'confirm' },
+        { text: 'Cerrar', role: 'confirm' },
       ],
     });
     await confirm.present();
@@ -231,8 +255,6 @@ export class TableDetailPage {
 
   private async promptBeneficiary(): Promise<boolean> {
     const info = this.tablesService.getClientInfo(this.tableId);
-    if (!info.client) return true;
-
     const beneficiary = await this.alertController.create({
       header: 'Beneficiario',
       message: 'Indica el beneficiario para esta orden.',
@@ -306,8 +328,8 @@ export class TableDetailPage {
   }
 
   private clampPeopleCount(value: number): number {
-    const safe = Number.isFinite(value) ? Math.trunc(value) : 2;
-    return Math.min(12, Math.max(2, safe));
+    const safe = Number.isFinite(value) ? Math.trunc(value) : 1;
+    return Math.min(12, Math.max(1, safe));
   }
 
   private normalizeAccountNames(names: string[], count: number): string[] {

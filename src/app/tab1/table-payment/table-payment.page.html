@@ -30,20 +30,6 @@
             <div class="client-label">Beneficiario</div>
             <div class="client-value">{{ clientInfo().beneficiary || '—' }}</div>
           </div>
-
-          <div class="client-actions">
-            <button type="button" class="ghost-btn" (click)="elegirCliente()">
-              Elegir cliente
-            </button>
-            <button
-              type="button"
-              class="ghost-btn"
-              [disabled]="!clientInfo().client"
-              (click)="quitarCliente()"
-            >
-              Quitar cliente
-            </button>
-          </div>
         </div>
 
         <ng-container *ngIf="isShared(); else singleAccount">

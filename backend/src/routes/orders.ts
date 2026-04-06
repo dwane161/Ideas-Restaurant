@@ -39,7 +39,8 @@ const addItemSchema = z.object({
   productId: z.string().min(1),
   productName: z.string().min(1),
   unitPrice: z.number().nonnegative(),
-  qtyDelta: z.number().int()
+  qtyDelta: z.number().int(),
+  note: z.string().max(250).optional()
 });
 
 const paySchema = z.object({
@@ -118,6 +119,7 @@ export function registerOrdersRoutes(router: Router) {
             name: string;
             qty: number;
             unitPrice: number;
+            note: string | null;
             statusCode: string;
             statusLabel: string;
             statusColor: string | null;
@@ -139,6 +141,7 @@ export function registerOrdersRoutes(router: Router) {
             name: item.productName,
             qty: item.qty,
             unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+            note: item.note ?? null,
             statusCode: item.itemStatus,
             statusLabel: meta?.label ?? item.itemStatus,
             statusColor: meta?.color ?? null
@@ -218,14 +221,14 @@ export function registerOrdersRoutes(router: Router) {
           : [];
 
       const count =
-        billingMode === 'shared' ? Math.max(2, requestedNames.length || 2) : 1;
+        billingMode === 'shared' ? Math.max(1, requestedNames.length || 1) : 1;
 
       const accounts = Array.from({ length: count }, (_, index) => ({
         key: accountKeyForIndex(index),
         name:
           billingMode === 'shared'
             ? requestedNames[index] || `Cuenta ${index + 1}`
-            : 'Cuenta única'
+            : 'Cuenta 1'
       }));
 
       const order = await prisma.appOrder.create({
@@ -337,6 +340,7 @@ export function registerOrdersRoutes(router: Router) {
           name: string;
           qty: number;
           unitPrice: number;
+          note: string | null;
           statusCode: string;
           statusLabel: string;
           statusColor: string | null;
@@ -358,6 +362,7 @@ export function registerOrdersRoutes(router: Router) {
           name: item.productName,
           qty: item.qty,
           unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+          note: item.note ?? null,
           statusCode: item.itemStatus,
           statusLabel: meta?.label ?? item.itemStatus,
           statusColor: meta?.color ?? null
@@ -440,12 +445,14 @@ export function registerOrdersRoutes(router: Router) {
           productName: payload.productName,
           unitPrice: payload.unitPrice,
           qty: nextQty,
+          note: payload.note ?? null,
           itemStatus: 'pending'
         },
         update: {
           productName: payload.productName,
           unitPrice: payload.unitPrice,
-          qty: nextQty
+          qty: nextQty,
+          note: payload.note ?? undefined
         }
       });
 

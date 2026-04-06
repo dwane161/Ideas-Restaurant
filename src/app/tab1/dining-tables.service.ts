@@ -21,6 +21,7 @@ export interface OrderItem {
   name: string;
   qty: number;
   unitPrice: number;
+  note?: string | null;
   statusCode?: string;
   statusLabel?: string;
   statusColor?: string | null;
@@ -84,6 +85,7 @@ export class DiningTablesService {
   private readonly lastItemStatusByKey = new Map<string, string>();
   private readonly lastOrderAllCompletedById = new Map<string, boolean>();
   private elapsedTimer: ReturnType<typeof setInterval> | null = null;
+  private tablesRetryAtMs = 0;
 
   constructor(
     private readonly ordersApi: OrdersApiService,
@@ -137,7 +139,19 @@ export class DiningTablesService {
 
   refreshOrdersFromBackend(onDone?: () => void): void {
     if (!this.hasTablesLoaded() && !this.isTablesLoading()) {
-      this.loadTablesFromBackend(() => this.refreshOrdersFromBackend(onDone));
+      const now = Date.now();
+      if (this.tablesRetryAtMs > now) {
+        onDone?.();
+        return;
+      }
+
+      this.loadTablesFromBackend((ok) => {
+        if (!ok) {
+          onDone?.();
+          return;
+        }
+        this.refreshOrdersFromBackend(onDone);
+      });
       return;
     }
 
@@ -165,6 +179,7 @@ export class DiningTablesService {
                 name: i.name,
                 qty: i.qty,
                 unitPrice: i.unitPrice,
+                note: (i as { note?: string | null }).note ?? null,
                 statusCode: i.statusCode ?? i.status ?? undefined,
                 statusLabel: i.statusLabel ?? i.statusCode ?? i.status ?? undefined,
                 statusColor: i.statusColor ?? null,
@@ -232,7 +247,7 @@ export class DiningTablesService {
     });
   }
 
-  loadTablesFromBackend(onDone?: () => void): void {
+  loadTablesFromBackend(onDone?: (ok: boolean) => void): void {
     if (this.isTablesLoading()) return;
     this.isTablesLoading.set(true);
 
@@ -251,18 +266,21 @@ export class DiningTablesService {
         this.tables.set(next);
         this.hasTablesLoaded.set(true);
         this.isTablesLoading.set(false);
+        this.tablesRetryAtMs = 0;
 
         if (this.selectedTableId() == null && next.length > 0) {
           this.selectTable(next[0].id);
         }
 
-        onDone?.();
+        onDone?.(true);
       },
       error: () => {
         // Keep whatever we already have; avoid blocking the app if tables endpoint fails.
         this.hasTablesLoaded.set(this.tables().length > 0);
         this.isTablesLoading.set(false);
-        onDone?.();
+        // Prevent tight retry loops (e.g. when polling while backend is down).
+        this.tablesRetryAtMs = Date.now() + 30_000;
+        onDone?.(false);
       },
     });
   }
@@ -524,7 +542,7 @@ export class DiningTablesService {
         ? (accountNames ?? []).map((n) => (typeof n === 'string' ? n.trim() : ''))
         : [];
 
-    const sharedCount = Math.max(2, normalizedNames.length || 2);
+    const sharedCount = Math.max(1, normalizedNames.length || 1);
 
     const accounts: AccountOrder[] =
       billingMode === 'shared'
@@ -533,7 +551,7 @@ export class DiningTablesService {
             name: normalizedNames[index] || `Cuenta ${index + 1}`,
             items: [],
           }))
-        : [{ id: 'A', name: 'Cuenta única', items: [] }];
+        : [{ id: 'A', name: 'Cuenta 1', items: [] }];
 
     this.ordersByTableId.update((current) => ({
       ...current,
@@ -594,7 +612,7 @@ export class DiningTablesService {
     this.ordersByTableId.update((current) => {
       const existing = current[tableId] ?? {
         tableId,
-        accounts: [{ id: 'A', name: 'Cuenta única', items: [] }],
+        accounts: [{ id: 'A', name: 'Cuenta 1', items: [] }],
       };
 
       const accounts = existing.accounts.map((account) => {
@@ -621,7 +639,11 @@ export class DiningTablesService {
         return {
           ...account,
           items: account.items
-            .map((i) => (i.id === item.id ? { ...i, qty: Math.max(0, nextQty) } : i))
+            .map((i) =>
+              i.id === item.id
+                ? { ...i, qty: Math.max(0, nextQty), note: item.note ?? i.note ?? null }
+                : i,
+            )
             .filter((i) => i.qty > 0),
         };
       });
@@ -645,6 +667,7 @@ export class DiningTablesService {
         productName: item.name,
         unitPrice: item.unitPrice,
         qtyDelta,
+        note: item.note ?? undefined,
       })
       .subscribe({ error: () => {} });
   }
@@ -799,6 +822,7 @@ export class DiningTablesService {
                 name: i.name,
                 qty: i.qty,
                 unitPrice: i.unitPrice,
+                note: (i as { note?: string | null }).note ?? null,
                 statusCode: i.statusCode ?? i.status ?? undefined,
                 statusLabel: i.statusLabel ?? i.statusCode ?? i.status ?? undefined,
                 statusColor: i.statusColor ?? null,

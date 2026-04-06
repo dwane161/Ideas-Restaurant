@@ -1,5 +1,5 @@
 import { Component, computed, signal } from '@angular/core';
-import { ToastController } from '@ionic/angular';
+import { AlertController, ToastController } from '@ionic/angular';
 import {
   DiningTablesService,
   type AccountOrder,
@@ -55,8 +55,8 @@ export class Tab2Page {
 
   readonly isAddModalOpen = signal(false);
   readonly pendingDishId = signal<string | null>(null);
-  readonly selectedTableIdForAdd = signal<string | null>(null);
   readonly selectedAccountIdForAdd = signal<string | null>(null);
+  readonly noteForAdd = signal<string>('');
 
   selectedCategoryId: MenuCategoryId = 'all';
 
@@ -80,15 +80,24 @@ export class Tab2Page {
   });
 
   readonly accountsForSelectedTable = computed<AccountOrder[]>(() => {
-    const tableId = this.selectedTableIdForAdd();
-    if (!tableId) return [];
-    const order = this.tablesService.getOrder(Number(tableId));
+    const table = this.selectedTable();
+    if (!table || table.status !== 'occupied') return [];
+    const order = this.tablesService.getOrder(table.id);
     return order?.accounts ?? [];
+  });
+
+  readonly selectedTableLabelForAdd = computed(() => {
+    const table = this.selectedTable();
+    if (!table || table.status !== 'occupied') {
+      return 'Selecciona una mesa ocupada desde el dashboard.';
+    }
+    return this.formatTableLabel(table);
   });
 
   constructor(
     private readonly tablesService: DiningTablesService,
     private readonly toastController: ToastController,
+    private readonly alertController: AlertController,
     private readonly articulosApi: ArticulosApiService,
     private readonly auth: AuthService,
   ) {}
@@ -131,17 +140,54 @@ export class Tab2Page {
 
   addToOrder(dish: MenuDish): void {
     const selected = this.selectedTable();
-    this.pendingDishId.set(dish.id);
-    this.selectedTableIdForAdd.set(
-      selected?.status === 'occupied' ? String(selected.id) : null,
-    );
-    if (selected?.status === 'occupied') {
-      const order = this.tablesService.getOrder(selected.id);
-      const accounts = order?.accounts ?? [];
-      this.selectedAccountIdForAdd.set(accounts.length === 1 ? accounts[0].id : null);
-    } else {
-      this.selectedAccountIdForAdd.set(null);
+    if (!selected || selected.status !== 'occupied') {
+      void this.toastController
+        .create({
+          message: 'Abre/selecciona una mesa ocupada para añadir productos.',
+          duration: 1800,
+          color: 'warning',
+          position: 'top',
+        })
+        .then((t) => t.present());
+      return;
     }
+
+    const order = this.tablesService.getOrder(selected.id);
+    const accounts = order?.accounts ?? [];
+
+    // If there is only one beneficiary/account, add immediately without questions.
+    if (accounts.length <= 1) {
+      const accountId = accounts[0]?.id ?? 'A';
+      this.tablesService.addItemToOrder(
+        selected.id,
+        accountId,
+        { id: dish.id, name: dish.name, unitPrice: dish.price, note: null },
+        1,
+      );
+
+      void this.toastController
+        .create({
+          message: this.buildAddedMessage(dish.name, selected.id),
+          duration: 2400,
+          color: 'success',
+          position: 'top',
+          buttons: [
+            {
+              text: 'Comentario',
+              handler: () => {
+                void this.promptCommentAndSave(dish, selected.id, accountId);
+              },
+            },
+          ],
+        })
+        .then((t) => t.present());
+      return;
+    }
+
+    // Multiple beneficiaries/accounts: ask which one + optional comment.
+    this.pendingDishId.set(dish.id);
+    this.selectedAccountIdForAdd.set(null);
+    this.noteForAdd.set('');
     this.isAddModalOpen.set(true);
   }
 
@@ -162,18 +208,17 @@ export class Tab2Page {
   closeAddModal(): void {
     this.isAddModalOpen.set(false);
     this.pendingDishId.set(null);
-    this.selectedTableIdForAdd.set(null);
     this.selectedAccountIdForAdd.set(null);
+    this.noteForAdd.set('');
   }
 
   async confirmAddToOrder(): Promise<void> {
     const dish = this.pendingDish();
-    const tableId = this.selectedTableIdForAdd();
     const accountId = this.selectedAccountIdForAdd();
 
-    if (!dish || !tableId) return;
-    const resolvedTableId = Number(tableId);
-    if (!Number.isFinite(resolvedTableId)) return;
+    const table = this.selectedTable();
+    if (!dish || !table || table.status !== 'occupied') return;
+    const resolvedTableId = table.id;
 
     const order: TableOrder | undefined = this.tablesService.getOrder(resolvedTableId);
     const accounts = order?.accounts ?? [];
@@ -181,12 +226,13 @@ export class Tab2Page {
     const resolvedAccountName =
       accounts.find((a) => a.id === resolvedAccountId)?.name ?? undefined;
     const isShared = accounts.length > 1;
+    const note = this.noteForAdd().trim();
 
     this.tablesService.selectTable(resolvedTableId);
     this.tablesService.addItemToOrder(
       resolvedTableId,
       resolvedAccountId,
-      { id: dish.id, name: dish.name, unitPrice: dish.price },
+      { id: dish.id, name: dish.name, unitPrice: dish.price, note: note || null },
       1,
     );
 
@@ -205,19 +251,44 @@ export class Tab2Page {
     await toast.present();
   }
 
-  setTableIdForAdd(value: unknown): void {
-    const id = typeof value === 'string' ? value : String(value ?? '');
-    this.selectedTableIdForAdd.set(id ? id : null);
-
-    const numericId = Number(id);
-    const order = Number.isFinite(numericId) ? this.tablesService.getOrder(numericId) : undefined;
-    const accounts = order?.accounts ?? [];
-    this.selectedAccountIdForAdd.set(accounts.length === 1 ? accounts[0].id : null);
-  }
-
   setAccountIdForAdd(value: unknown): void {
     const id = typeof value === 'string' ? value : String(value ?? '');
     this.selectedAccountIdForAdd.set(id ? id : null);
+  }
+
+  setNoteForAdd(value: unknown): void {
+    this.noteForAdd.set(typeof value === 'string' ? value : String(value ?? ''));
+  }
+
+  private async promptCommentAndSave(dish: MenuDish, tableId: number, accountId: string): Promise<void> {
+    const alert = await this.alertController.create({
+      header: 'Comentario',
+      message: 'Ej: término de la carne, sin cebolla, etc.',
+      inputs: [
+        {
+          name: 'note',
+          type: 'text',
+          placeholder: 'Comentario',
+        },
+      ],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Guardar', role: 'confirm' },
+      ],
+    });
+    await alert.present();
+    const result = await alert.onDidDismiss();
+    if (result.role !== 'confirm') return;
+    const note = String(result.data?.values?.note ?? '').trim();
+    if (!note) return;
+
+    // Reuse addItem endpoint with qtyDelta=0 to only update the note.
+    this.tablesService.addItemToOrder(
+      tableId,
+      accountId,
+      { id: dish.id, name: dish.name, unitPrice: dish.price, note },
+      0,
+    );
   }
 
   trackDishById(_: number, dish: MenuDish): string {

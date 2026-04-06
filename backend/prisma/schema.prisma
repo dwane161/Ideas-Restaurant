@@ -6656,6 +6656,7 @@ model AppOrderItem {
   productName String   @db.NVarChar(150)
   unitPrice   Decimal  @db.Decimal(28, 6) // DOP
   qty         Int
+  note        String?  @db.NVarChar(250) @map("Note")
   itemStatus  String   @default("pending") @db.NVarChar(20)
   createdAt   DateTime @default(now()) @db.DateTime
   updatedAt   DateTime @updatedAt @db.DateTime

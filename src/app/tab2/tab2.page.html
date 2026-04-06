@@ -121,32 +121,14 @@
 
           <div class="modal-section">
             <div class="modal-section-title">Mesa</div>
-
-            <div *ngIf="occupiedTables().length === 0" class="modal-empty">
-              No hay mesas ocupadas para cargar pedidos.
+            <div class="modal-empty">
+              {{ selectedTableLabelForAdd() }}
             </div>
-
-            <ion-item *ngIf="occupiedTables().length > 0">
-              <ion-label>Mesa</ion-label>
-              <ion-select
-                [value]="selectedTableIdForAdd()"
-                placeholder="Seleccionar"
-                interface="action-sheet"
-                (ionChange)="setTableIdForAdd($event.detail.value)"
-              >
-                <ion-select-option
-                  *ngFor="let t of occupiedTables(); trackBy: trackTableById"
-                  [value]="'' + t.id"
-                >
-                  {{ formatTableLabel(t) }}
-                </ion-select-option>
-              </ion-select>
-            </ion-item>
           </div>
 
           <div
             class="modal-section"
-            *ngIf="selectedTableIdForAdd() && accountsForSelectedTable().length > 1"
+            *ngIf="accountsForSelectedTable().length > 1"
           >
             <div class="modal-section-title">Cargar a</div>
             <ion-item>
@@ -167,12 +149,24 @@
             </ion-item>
           </div>
 
+          <div class="modal-section">
+            <div class="modal-section-title">Comentario (opcional)</div>
+            <ion-item>
+              <ion-textarea
+                [value]="noteForAdd()"
+                placeholder="Ej: término de la carne, sin cebolla..."
+                autoGrow="true"
+                inputmode="text"
+                (ionInput)="setNoteForAdd($event.detail.value)"
+              ></ion-textarea>
+            </ion-item>
+          </div>
+
           <div class="modal-actions">
             <ion-button
               expand="block"
               [disabled]="
                 !pendingDish() ||
-                !selectedTableIdForAdd() ||
                 (accountsForSelectedTable().length > 1 && !selectedAccountIdForAdd())
               "
               (click)="confirmAddToOrder()"
