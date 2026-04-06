@@ -1,6 +1,8 @@
 import { Component, computed } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DiningTablesService, type OrderItem, type TableInvoice } from '../dining-tables.service';
+import { isAndroidNative, printReceipt } from '../../printing/thermal-printer';
+import { AlertController } from '@ionic/angular';
 
 @Component({
   selector: 'app-table-invoice',
@@ -19,6 +21,7 @@ export class TableInvoicePage {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly tablesService: DiningTablesService,
+    private readonly alertController: AlertController,
   ) {}
 
   get tableLabel(): string {
@@ -41,6 +44,60 @@ export class TableInvoicePage {
     const client = info.client;
     const beneficiary = info.beneficiary;
 
+    const nativeText = this.buildEscPosInvoice(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+    void printReceipt({ text: nativeText, dpi: 203, widthMm: 48, charsPerLine: 32, cut: true })
+      .then((printed) => {
+        if (printed) return;
+        this.printViaBrowser(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+      })
+      .catch(async (err: unknown) => {
+        if (isAndroidNative()) {
+          const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
+          const alert = await this.alertController.create({
+            header: 'No se pudo imprimir',
+            message,
+            buttons: ['OK'],
+          });
+          await alert.present();
+          return;
+        }
+        this.printViaBrowser(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+      });
+  }
+
+  private buildEscPosInvoice(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): string {
+    const line = '[L]--------------------------------\\n';
+    const header = `[C]<b>${this.tableLabel}</b>\\n` +
+      (clientName && clientId ? `[L]Cliente: ${clientName} (${clientId})\\n` : '') +
+      (beneficiary ? `[L]Beneficiario: ${beneficiary}\\n` : '') +
+      `[L]${new Date(inv.createdAtIso).toLocaleString()}\\n` +
+      line;
+
+    const splits = inv.splits
+      .map((s) => `[L]${s.accountName}[R]$${Number(s.amount).toFixed(2)}\\n`)
+      .join('');
+
+    const accounts = inv.order.accounts
+      .map((account) => {
+        const items = (account.items ?? [])
+          .filter((i) => (i.qty ?? 0) > 0)
+          .map((i) => {
+            const amount = (i.qty * i.unitPrice).toFixed(2);
+            const note = i.note ? `\\n[L]  ${i.note}` : '';
+            return `[L]${i.qty}x ${i.name}[R]$${amount}${note}\\n`;
+          })
+          .join('');
+        const total = this.accountTotal(account.items ?? []);
+        return `${line}[C]<b>${account.name}</b>\\n${items || '[L]Sin productos.\\n'}[L]Subtotal[R]$${total.toFixed(2)}\\n`;
+      })
+      .join('');
+
+    const total = `${line}[L]<b>Total</b>[R]<b>$${Number(inv.total).toFixed(2)}</b>\\n\\n\\n`;
+
+    return header + `[C]Pago por cuentas\\n` + splits + accounts + total;
+  }
+
+  private printViaBrowser(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): void {
     const splitLines = inv.splits
       .map((s) => `<tr><td>${this.escapeHtml(s.accountName)}</td><td class="right">$${Number(s.amount).toFixed(2)}</td></tr>`)
       .join('');
@@ -92,7 +149,7 @@ export class TableInvoicePage {
           <h1>${this.tableLabel}</h1>
           <div class="meta">
             Factura: ${this.escapeHtml(inv.id)}<br/>
-            ${client ? `Cliente: ${this.escapeHtml(client.name)} (${this.escapeHtml(client.id)})<br/>` : ''}
+            ${clientName && clientId ? `Cliente: ${this.escapeHtml(clientName)} (${this.escapeHtml(clientId)})<br/>` : ''}
             ${beneficiary ? `Beneficiario: ${this.escapeHtml(beneficiary)}<br/>` : ''}
             ${new Date(inv.createdAtIso).toLocaleString()}
           </div>

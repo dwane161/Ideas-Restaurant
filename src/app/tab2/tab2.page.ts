@@ -155,38 +155,9 @@ export class Tab2Page {
     const order = this.tablesService.getOrder(selected.id);
     const accounts = order?.accounts ?? [];
 
-    // If there is only one beneficiary/account, add immediately without questions.
-    if (accounts.length <= 1) {
-      const accountId = accounts[0]?.id ?? 'A';
-      this.tablesService.addItemToOrder(
-        selected.id,
-        accountId,
-        { id: dish.id, name: dish.name, unitPrice: dish.price, note: null },
-        1,
-      );
-
-      void this.toastController
-        .create({
-          message: this.buildAddedMessage(dish.name, selected.id),
-          duration: 2400,
-          color: 'success',
-          position: 'top',
-          buttons: [
-            {
-              text: 'Comentario',
-              handler: () => {
-                void this.promptCommentAndSave(dish, selected.id, accountId);
-              },
-            },
-          ],
-        })
-        .then((t) => t.present());
-      return;
-    }
-
-    // Multiple beneficiaries/accounts: ask which one + optional comment.
+    // Always show the same "add" UI so the comment can be entered there (even for single-account orders).
     this.pendingDishId.set(dish.id);
-    this.selectedAccountIdForAdd.set(null);
+    this.selectedAccountIdForAdd.set(accounts.length > 0 ? accounts[0].id : null);
     this.noteForAdd.set('');
     this.isAddModalOpen.set(true);
   }
@@ -258,37 +229,6 @@ export class Tab2Page {
 
   setNoteForAdd(value: unknown): void {
     this.noteForAdd.set(typeof value === 'string' ? value : String(value ?? ''));
-  }
-
-  private async promptCommentAndSave(dish: MenuDish, tableId: number, accountId: string): Promise<void> {
-    const alert = await this.alertController.create({
-      header: 'Comentario',
-      message: 'Ej: término de la carne, sin cebolla, etc.',
-      inputs: [
-        {
-          name: 'note',
-          type: 'text',
-          placeholder: 'Comentario',
-        },
-      ],
-      buttons: [
-        { text: 'Cancelar', role: 'cancel' },
-        { text: 'Guardar', role: 'confirm' },
-      ],
-    });
-    await alert.present();
-    const result = await alert.onDidDismiss();
-    if (result.role !== 'confirm') return;
-    const note = String(result.data?.values?.note ?? '').trim();
-    if (!note) return;
-
-    // Reuse addItem endpoint with qtyDelta=0 to only update the note.
-    this.tablesService.addItemToOrder(
-      tableId,
-      accountId,
-      { id: dish.id, name: dish.name, unitPrice: dish.price, note },
-      0,
-    );
   }
 
   trackDishById(_: number, dish: MenuDish): string {

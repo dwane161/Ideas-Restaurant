@@ -33,4 +33,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Required to access USB printers via Android USB Host API -->
+    <uses-feature android:name="android.hardware.usb.host" />
 </manifest>

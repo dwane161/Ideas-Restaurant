@@ -106,6 +106,27 @@ export function registerOrdersRoutes(router: Router) {
         include: { accounts: true, items: true }
       });
 
+      const orderIds = orders.map((o) => o.id);
+      const invoices = orderIds.length
+        ? await prisma.appInvoice.findMany({
+            where: { orderId: { in: orderIds } },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              splits: {
+                include: {
+                  account: { select: { id: true, key: true, name: true } }
+                }
+              }
+            }
+          })
+        : [];
+
+      const invoiceByOrderId = new Map<string, (typeof invoices)[number]>();
+      for (const inv of invoices) {
+        // Keep the newest invoice per orderId (query is ordered desc).
+        if (!invoiceByOrderId.has(inv.orderId)) invoiceByOrderId.set(inv.orderId, inv);
+      }
+
       const normalized = orders.map((order) => {
         const sortedAccounts = order.accounts
           .slice()
@@ -160,7 +181,23 @@ export function registerOrdersRoutes(router: Router) {
           clientName: order.clientName,
           beneficiary: order.beneficiary,
           billingMode: order.billingMode,
-          accounts
+          accounts,
+          invoice: (() => {
+            const inv = invoiceByOrderId.get(order.id);
+            if (!inv) return null;
+            return {
+              id: inv.id,
+              createdAtIso: inv.createdAt.toISOString(),
+              method: inv.method,
+              total: Number(inv.total),
+              splits: inv.splits.map((s) => ({
+                accountKey: s.account.key,
+                accountName: s.account.name,
+                amount: Number(s.amount),
+                percent: s.percent === null ? null : Number(s.percent)
+              }))
+            };
+          })()
         };
       });
 
@@ -369,6 +406,18 @@ export function registerOrdersRoutes(router: Router) {
         });
       }
 
+      const invoice = await prisma.appInvoice.findFirst({
+        where: { orderId: order.id },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          splits: {
+            include: {
+              account: { select: { id: true, key: true, name: true } }
+            }
+          }
+        }
+      });
+
       res.json({
         order: {
           id: order.id,
@@ -382,7 +431,21 @@ export function registerOrdersRoutes(router: Router) {
           clientName: order.clientName,
           beneficiary: order.beneficiary,
           billingMode: order.billingMode,
-          accounts
+          accounts,
+          invoice: invoice
+            ? {
+                id: invoice.id,
+                createdAtIso: invoice.createdAt.toISOString(),
+                method: invoice.method,
+                total: Number(invoice.total),
+                splits: invoice.splits.map((s) => ({
+                  accountKey: s.account.key,
+                  accountName: s.account.name,
+                  amount: Number(s.amount),
+                  percent: s.percent === null ? null : Number(s.percent)
+                }))
+              }
+            : null
         }
       });
     } catch (err) {

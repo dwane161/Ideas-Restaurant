@@ -2,6 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
+import { debugUsb, isAndroidNative, printReceipt } from '../../printing/thermal-printer';
 import {
   DiningTablesService,
   type PaymentSplit,
@@ -235,8 +236,30 @@ export class TablePaymentPage {
     }
 
     const total = this.total();
-    const client = this.clientInfo().client;
-    const beneficiary = this.clientInfo().beneficiary;
+	    const client = this.clientInfo().client;
+	    const beneficiary = this.clientInfo().beneficiary;
+	
+	    const nativeText = this.buildEscPosPayment(order, total, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+	    if (isAndroidNative()) {
+	      try {
+	        await printReceipt({ text: nativeText, dpi: 203, widthMm: 48, charsPerLine: 32, cut: true });
+	        return;
+	      } catch (err: unknown) {
+	        const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
+	        const debug = await debugUsb().catch(() => null);
+	        const debugText = debug ? `\n\nDebug USB:\n${JSON.stringify(debug)}` : '';
+	        const alert = await this.alertController.create({
+	          header: 'No se pudo imprimir',
+	          message:
+	            `${message}\n\n` +
+	            `Si estás usando una tablet con impresora integrada (ej. MJ‑Q75), es posible que requiera el SDK del fabricante y no se detecte como impresora USB (ESC/POS).` +
+	            debugText,
+	          buttons: ['OK'],
+	        });
+	        await alert.present();
+	        return;
+	      }
+	    }
 
     const accountSections = order.accounts.map((account) => {
       const amount = account.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
@@ -303,6 +326,34 @@ export class TablePaymentPage {
     w.document.open();
     w.document.write(html);
     w.document.close();
+  }
+
+  private buildEscPosPayment(order: TableOrder, total: number, clientName: string | null, clientId: string | null, beneficiary: string | null): string {
+    const line = '[L]--------------------------------\\n';
+    const header =
+      `[C]<b>${this.tableLabel}</b>\\n` +
+      (clientName && clientId ? `[L]Cliente: ${clientName} (${clientId})\\n` : '') +
+      (beneficiary ? `[L]Beneficiario: ${beneficiary}\\n` : '') +
+      `[L]${new Date().toLocaleString()}\\n` +
+      line;
+
+    const accounts = order.accounts
+      .map((account) => {
+        const amount = account.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+        const lines = account.items
+          .filter((i) => i.qty > 0)
+          .map((i) => {
+            const itemTotal = (i.qty * i.unitPrice).toFixed(2);
+            const note = i.note ? `\\n[L]  ${i.note}` : '';
+            return `[L]${i.qty}x ${i.name}[R]$${itemTotal}${note}\\n`;
+          })
+          .join('');
+        return `${line}[C]<b>${account.name}</b>\\n${lines || '[L]Sin productos.\\n'}[L]Subtotal[R]$${amount.toFixed(2)}\\n`;
+      })
+      .join('');
+
+    const footer = `${line}[L]<b>Total</b>[R]<b>$${total.toFixed(2)}</b>\\n\\n\\n`;
+    return header + accounts + footer;
   }
 
   private orderHasItems(order: TableOrder): boolean {

@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    registerPlugin(ThermalPrinterPlugin.class);
 
     WebView webView = this.getBridge().getWebView();
     WebSettings settings = webView.getSettings();

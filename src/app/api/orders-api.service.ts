@@ -53,6 +53,18 @@ export interface RemoteOrder {
   clientName?: string | null;
   beneficiary?: string | null;
   billingMode: BillingMode;
+  invoice?: {
+    id: string;
+    createdAtIso: string;
+    method: PaymentMethod;
+    total: number;
+    splits: Array<{
+      accountKey: string;
+      accountName: string;
+      amount: number;
+      percent: number | null;
+    }>;
+  } | null;
   accounts: Array<{
     key: string;
     name: string;

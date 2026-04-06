@@ -165,6 +165,7 @@ export class DiningTablesService {
 
         const nextOrders: Record<number, TableOrder> = {};
         const nextClients: Record<number, TableClientInfo> = {};
+        const nextInvoices: Record<number, TableInvoice> = {};
         for (const order of orders) {
           const createdAtMs = this.parseIsoToMs(order.createdAtIso) ?? Date.now();
           nextOrders[order.tableId] = {
@@ -197,10 +198,50 @@ export class DiningTablesService {
               : null,
             beneficiary: String(order.beneficiary ?? ''),
           };
+
+          if (order.invoice) {
+            const localOrder = nextOrders[order.tableId];
+            nextInvoices[order.tableId] = {
+              id: order.invoice.id,
+              tableId: order.tableId,
+              createdAtIso: order.invoice.createdAtIso,
+              order: localOrder,
+              total: Number(order.invoice.total ?? 0),
+              method: order.invoice.method,
+              splits: (order.invoice.splits ?? []).map((s) => ({
+                accountId: s.accountKey,
+                accountName: s.accountName,
+                amount: Number(s.amount ?? 0),
+                percent: s.percent === null ? undefined : Number(s.percent),
+              })),
+            };
+          }
         }
 
         this.ordersByTableId.set(nextOrders);
         this.clientsByTableId.set(nextClients);
+        const currentInvoices = this.invoicesByTableId();
+        const mergedInvoices: Record<number, TableInvoice> = {};
+        for (const tableIdStr of Object.keys(nextOrders)) {
+          const tableId = Number(tableIdStr);
+          if (Number.isNaN(tableId)) continue;
+
+          if (nextInvoices[tableId]) {
+            mergedInvoices[tableId] = nextInvoices[tableId];
+            continue;
+          }
+
+          const existing = currentInvoices[tableId];
+          const nextOrder = nextOrders[tableId];
+          if (!existing || !nextOrder) continue;
+
+          // Keep local invoice until backend returns one (avoid UI flicker right after paying).
+          if (existing.order?.remoteOrderId && nextOrder.remoteOrderId && existing.order.remoteOrderId !== nextOrder.remoteOrderId) {
+            continue;
+          }
+          mergedInvoices[tableId] = { ...existing, order: nextOrder };
+        }
+        this.invoicesByTableId.set(mergedInvoices);
 
         this.tables.update((tables) =>
           tables.map((t) => {

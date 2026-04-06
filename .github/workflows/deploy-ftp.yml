@@ -66,3 +66,9 @@ jobs:
             **/.git*
             **/.DS_Store
             **/.env
+            # HostBuddy/Windows can keep Prisma engines locked while the Node app is running.
+            # Avoid deploying engine binaries to prevent FTP 550 "file in use".
+            **/node_modules/.prisma/client/**/query_engine*
+            **/node_modules/.prisma/client/**/libquery_engine*
+            **/node_modules/.prisma/client/*.wasm
+            **/node_modules/.prisma/client/*.node
