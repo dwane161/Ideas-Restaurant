@@ -34,6 +34,7 @@ export class TableDetailPage {
   readonly billingMode = signal<BillingMode>('shared');
   readonly peopleCount = signal<number>(1);
   readonly accountNames = signal<string[]>(['']);
+  readonly openError = signal<string>('');
 
   readonly table = computed<DiningTable | undefined>(() =>
     this.tablesService.getTable(this.tableId),
@@ -49,26 +50,11 @@ export class TableDetailPage {
 
   readonly clientInfo = computed(() => this.tablesService.getClientInfo(this.tableId));
 
-  private beneficiaryPrompted = false;
-
   ionViewWillEnter(): void {
-    // For older orders that may not have beneficiary yet, enforce it when table is occupied.
-    const t = this.tablesService.getTable(this.tableId);
-    if (t?.status !== 'occupied') return;
-
+    // Do not prompt for beneficiary here; the "Abrir mesa" UI includes the input.
     const info = this.tablesService.getClientInfo(this.tableId);
-    const order = this.tablesService.getOrder(this.tableId);
-    const accountCount = order?.accounts?.length ?? 0;
-
-    if (!info.beneficiary && accountCount > 1) {
-      // For shared orders, keep beneficiary implicit.
-      this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
-      return;
-    }
-
-    if (!info.beneficiary && !this.beneficiaryPrompted) {
-      this.beneficiaryPrompted = true;
-      void this.promptBeneficiary();
+    if (info.beneficiary && !this.accountNames()[0]?.trim()) {
+      this.accountNames.set(this.normalizeAccountNames([info.beneficiary], this.clampPeopleCount(this.peopleCount())));
     }
   }
 
@@ -86,31 +72,30 @@ export class TableDetailPage {
     // Pass empty names; backend/service will create "Cuenta 1..N".
     const names = this.normalizeAccountNames(this.accountNames(), count);
 
-    if (count <= 1) {
-      // Single beneficiary required.
-      if (!info.beneficiary) {
-        const ok = await this.promptBeneficiary();
-        if (!ok) return;
-        const next = this.tablesService.getClientInfo(this.tableId);
-        if (!next.beneficiary) return;
-      }
-    } else {
-      // Multiple beneficiaries: require a name for each account and auto-set order beneficiary.
+    if (count > 1) {
       const missing = names.some((n) => !n.trim());
       if (missing) {
-        const alert = await this.alertController.create({
-          header: 'Beneficiarios requeridos',
-          message: 'Debes indicar el nombre de cada beneficiario para continuar.',
-          buttons: ['OK'],
-        });
-        await alert.present();
+        this.openError.set('Debes indicar el nombre de cada beneficiario para continuar.');
         return;
       }
 
-      if (!info.beneficiary) {
+      // For shared orders, keep order-level beneficiary implicit.
+      if (info.beneficiary !== 'Varios') {
         this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: 'Varios' });
       }
+    } else {
+      const first = names[0]?.trim() ?? '';
+      if (!first) {
+        this.openError.set('Debes indicar un beneficiario para continuar.');
+        return;
+      }
+
+      if (info.beneficiary !== first) {
+        this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: first });
+      }
     }
+
+    this.openError.set('');
     this.tablesService.openTable(this.tableId, 'shared', names);
     this.irAMenu();
   }
@@ -222,7 +207,7 @@ export class TableDetailPage {
     const selected = clientes.find((c) => c.id === selectedId) ?? clientes[0];
 
     this.tablesService.setClientInfo(this.tableId, { client: selected, beneficiary: '' });
-    await this.promptBeneficiary();
+    this.openError.set('');
 
     const makeDefault = await this.alertController.create({
       header: 'Cliente por defecto',
@@ -243,6 +228,7 @@ export class TableDetailPage {
 
   quitarCliente(): void {
     this.tablesService.clearClientInfo(this.tableId);
+    this.openError.set('');
   }
 
   itemStatusClass(status: string | undefined): string {
@@ -314,6 +300,7 @@ export class TableDetailPage {
     const next = this.clampPeopleCount(this.peopleCount() - 1);
     this.peopleCount.set(next);
     this.accountNames.set(this.normalizeAccountNames(this.accountNames(), next));
+    this.openError.set('');
   }
 
   setAccountName(index: number, value: unknown): void {
@@ -321,6 +308,14 @@ export class TableDetailPage {
     const next = [...current];
     next[index] = typeof value === 'string' ? value : String(value ?? '');
     this.accountNames.set(next);
+    this.openError.set('');
+
+    // Keep order-level beneficiary in sync when there is a single account.
+    if (index === 0 && this.clampPeopleCount(this.peopleCount()) <= 1) {
+      const info = this.tablesService.getClientInfo(this.tableId);
+      const first = next[0]?.trim() ?? '';
+      this.tablesService.setClientInfo(this.tableId, { client: info.client, beneficiary: first });
+    }
   }
 
   trackByIndex(index: number): number {

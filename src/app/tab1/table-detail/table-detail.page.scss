@@ -163,6 +163,17 @@
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
+.field-error {
+  margin: -6px 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+  color: #7f1d1d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .mode-hint {
   margin-top: 10px;
   font-size: 12px;

@@ -51,31 +51,23 @@
               <ng-template #noClientOpen>—</ng-template>
             </div>
           </div>
-          <ng-container *ngIf="peopleCount() <= 1; else multipleBeneficiaries">
-            <div class="client-row">
-              <div class="client-label">Beneficiario</div>
-              <div class="client-value">{{ clientInfo().beneficiary || '—' }}</div>
-            </div>
-          </ng-container>
-          <ng-template #multipleBeneficiaries>
-            <div class="accounts-form">
-              <div class="accounts-title">Beneficiarios</div>
-              <ion-list class="accounts-list" lines="none">
-                <ion-item
-                  class="account-item"
-                  *ngFor="let name of accountNames(); index as i; trackBy: trackByIndex"
-                >
-                  <ion-label position="stacked">Beneficiario {{ i + 1 }}</ion-label>
-                  <ion-input
-                    [value]="name"
-                    placeholder="Nombre"
-                    inputmode="text"
-                    (ionInput)="setAccountName(i, $event.detail.value)"
-                  ></ion-input>
-                </ion-item>
-              </ion-list>
-            </div>
-          </ng-template>
+          <div class="accounts-form">
+            <div class="accounts-title">Beneficiarios</div>
+            <ion-list class="accounts-list" lines="none">
+              <ion-item
+                class="account-item"
+                *ngFor="let name of accountNames(); index as i; trackBy: trackByIndex"
+              >
+                <ion-label position="stacked">Beneficiario {{ i + 1 }}</ion-label>
+                <ion-input
+                  [value]="name"
+                  placeholder="Nombre"
+                  inputmode="text"
+                  (ionInput)="setAccountName(i, $event.detail.value)"
+                ></ion-input>
+              </ion-item>
+            </ion-list>
+          </div>
 
           <div class="client-actions">
             <button type="button" class="ghost-btn" (click)="elegirCliente()">
@@ -90,6 +82,10 @@
               Quitar cliente
             </button>
           </div>
+        </div>
+
+        <div *ngIf="openError()" class="field-error">
+          {{ openError() }}
         </div>
 
         <section class="shared-panel" aria-label="Cuentas">

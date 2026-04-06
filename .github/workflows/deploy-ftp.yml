@@ -39,13 +39,19 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      - name: Prune dev deps (backend)
+        working-directory: backend
+        run: npm prune --omit=dev
+
       - name: Prepare deploy folder
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force deploy_backend | Out-Null
           Copy-Item -Recurse -Force backend\dist deploy_backend\dist
           Copy-Item -Force backend\package.json deploy_backend\package.json
+          Copy-Item -Force backend\package-lock.json deploy_backend\package-lock.json
           if (Test-Path backend\prisma) { Copy-Item -Recurse -Force backend\prisma deploy_backend\prisma }
+          if (Test-Path backend\node_modules) { Copy-Item -Recurse -Force backend\node_modules deploy_backend\node_modules }
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
