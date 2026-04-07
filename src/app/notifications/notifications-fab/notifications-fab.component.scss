@@ -1,5 +1,6 @@
 .notif-fab {
-  margin-bottom: 70px; // leave space for tab bar
+  // Leave space for the tab bar + safe area so it doesn't overlap the tabs.
+  margin-bottom: calc(92px + var(--ion-safe-area-bottom, 0px));
 }
 
 .notif-fab-badge {
