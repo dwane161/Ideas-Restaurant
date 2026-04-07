@@ -71,7 +71,7 @@ export class Tab1Page {
     switch (status) {
       case 'available': return 'DISPONIBLE';
       case 'occupied': return 'OCUPADA';
-      case 'pending': return 'PAGADO';
+      case 'pending': return 'CERRADA';
       case 'cleaning': return 'LIMPIANDO';
     }
     return '—';

@@ -65,7 +65,12 @@ export function registerOrdersRoutes(router: Router) {
         where: { isActive: true },
         select: { code: true, label: true, tableStatus: true, color: true }
       });
-      return new Map(rows.map((r: { code: string; label: string; tableStatus: string; color: string | null }) => [r.code, { label: r.label, tableStatus: r.tableStatus, color: r.color }]));
+      return new Map(
+        rows.map((r: { code: string; label: string; tableStatus: string; color: string | null }) => [
+          r.code,
+          { label: r.label, tableStatus: r.tableStatus, color: r.color },
+        ]),
+      );
     } catch {
       return new Map();
     }

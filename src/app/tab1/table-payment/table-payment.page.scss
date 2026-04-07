@@ -44,6 +44,40 @@
   color: var(--color-text-secondary);
 }
 
+.totals {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.totals-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.totals-row + .totals-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.totals-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--color-text-secondary);
+}
+
+.totals-value {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--color-tertiary);
+  white-space: nowrap;
+}
+
 .client-card {
   border-radius: 14px;
   border: 1px solid rgba(0, 0, 0, 0.06);

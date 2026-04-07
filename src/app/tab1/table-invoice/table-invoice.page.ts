@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DiningTablesService, type OrderItem, type TableInvoice } from '../dining-tables.service';
 import { isAndroidNative, printHtml } from '../../printing/android-printer';
 import { AlertController } from '@ionic/angular';
+import { BusinessApiService, type BusinessInfo } from '../../api/business-api.service';
 
 @Component({
   selector: 'app-table-invoice',
@@ -12,6 +13,7 @@ import { AlertController } from '@ionic/angular';
 })
 export class TableInvoicePage {
   private readonly tableId = Number(this.route.snapshot.paramMap.get('id'));
+  private readonly LEGAL_TIP_RATE = 0.1;
 
   readonly invoice = computed<TableInvoice | undefined>(() =>
     this.tablesService.getInvoice(this.tableId),
@@ -22,6 +24,7 @@ export class TableInvoicePage {
     private readonly router: Router,
     private readonly tablesService: DiningTablesService,
     private readonly alertController: AlertController,
+    private readonly businessApi: BusinessApiService,
   ) {}
 
   get tableLabel(): string {
@@ -36,6 +39,83 @@ export class TableInvoicePage {
     return items.reduce((sum, i) => sum + i.qty * i.unitPrice, 0);
   }
 
+  invoiceSubtotal(inv: TableInvoice): number {
+    return Number(inv.total ?? 0);
+  }
+
+  invoiceLegalTip(inv: TableInvoice): number {
+    const subtotal = this.invoiceSubtotal(inv);
+    return subtotal * this.LEGAL_TIP_RATE;
+  }
+
+  invoiceGrandTotal(inv: TableInvoice): number {
+    return this.invoiceSubtotal(inv) + this.invoiceLegalTip(inv);
+  }
+
+  splitTotalsWithTip(inv: TableInvoice): Array<{
+    accountId: string;
+    accountName: string;
+    subtotal: number;
+    tip: number;
+    total: number;
+    percent?: number;
+  }> {
+    const subtotalByAccountId = new Map<string, number>();
+    for (const a of inv.order.accounts ?? []) {
+      subtotalByAccountId.set(a.id, this.accountTotal(a.items ?? []));
+    }
+
+    const subtotalCents = Math.round(this.invoiceSubtotal(inv) * 100);
+    if (subtotalCents <= 0) {
+      return (inv.splits ?? []).map((s) => ({
+        accountId: s.accountId,
+        accountName: s.accountName,
+        subtotal: subtotalByAccountId.get(s.accountId) ?? Number(s.amount ?? 0),
+        tip: 0,
+        total: Number(s.amount ?? 0),
+        percent: s.percent,
+      }));
+    }
+
+    const totalTipCents = Math.round(subtotalCents * this.LEGAL_TIP_RATE);
+
+    const splits = (inv.splits ?? []).map((s) => {
+      const accountSubtotal = subtotalByAccountId.get(s.accountId) ?? Number(s.amount ?? 0);
+      return { ...s, _subtotalCents: Math.round(accountSubtotal * 100) };
+    });
+
+    let usedTipCents = 0;
+    const out: Array<{
+      accountId: string;
+      accountName: string;
+      subtotal: number;
+      tip: number;
+      total: number;
+      percent?: number;
+    }> = [];
+
+    splits.forEach((s, index) => {
+      const isLast = index === splits.length - 1;
+      const shareCents = isLast
+        ? totalTipCents - usedTipCents
+        : Math.floor((totalTipCents * s._subtotalCents) / subtotalCents);
+      usedTipCents += shareCents;
+
+      const subtotal = s._subtotalCents / 100;
+      const tip = shareCents / 100;
+      out.push({
+        accountId: s.accountId,
+        accountName: s.accountName,
+        subtotal,
+        tip,
+        total: subtotal + tip,
+        percent: s.percent,
+      });
+    });
+
+    return out;
+  }
+
   imprimirFactura(): void {
     const inv = this.invoice();
     if (!inv) return;
@@ -44,22 +124,40 @@ export class TableInvoicePage {
     const client = info.client;
     const beneficiary = info.beneficiary;
 
+    void this.imprimirFacturaInternal(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+  }
+
+  private async imprimirFacturaInternal(
+    inv: TableInvoice,
+    clientName: string | null,
+    clientId: string | null,
+    beneficiary: string | null,
+  ): Promise<void> {
+    let business: BusinessInfo | null = null;
+    try {
+      business = await this.businessApi.getBusiness();
+    } catch {
+      // best effort: print without business data
+      business = null;
+    }
+
     if (isAndroidNative()) {
-      const html = this.buildHtmlInvoice(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null, false);
-      void printHtml({ name: `${this.tableLabel} - Factura`, html })
-        .catch(async (err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
-          const alert = await this.alertController.create({
-            header: 'No se pudo imprimir',
-            message,
-            buttons: ['OK'],
-          });
-          await alert.present();
+      const html = this.buildHtmlInvoice(inv, business, clientName, clientId, beneficiary, false);
+      try {
+        await printHtml({ name: `${this.tableLabel} - Factura`, html });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
+        const alert = await this.alertController.create({
+          header: 'No se pudo imprimir',
+          message,
+          buttons: ['OK'],
         });
+        await alert.present();
+      }
       return;
     }
 
-    this.printViaBrowser(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+    this.printViaBrowser(inv, business, clientName, clientId, beneficiary);
   }
 
   private buildEscPosInvoice(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): string {
@@ -70,8 +168,8 @@ export class TableInvoicePage {
       `[L]${new Date(inv.createdAtIso).toLocaleString()}\\n` +
       line;
 
-    const splits = inv.splits
-      .map((s) => `[L]${s.accountName}[R]$${Number(s.amount).toFixed(2)}\\n`)
+    const splits = this.splitTotalsWithTip(inv)
+      .map((s) => `[L]${s.accountName}[R]$${Number(s.total).toFixed(2)}\\n`)
       .join('');
 
     const accounts = inv.order.accounts
@@ -89,14 +187,38 @@ export class TableInvoicePage {
       })
       .join('');
 
-    const total = `${line}[L]<b>Total</b>[R]<b>$${Number(inv.total).toFixed(2)}</b>\\n\\n\\n`;
+    const subtotal = this.invoiceSubtotal(inv);
+    const tip = this.invoiceLegalTip(inv);
+    const grand = this.invoiceGrandTotal(inv);
+
+    const total =
+      `${line}[L]Subtotal[R]$${subtotal.toFixed(2)}\\n` +
+      `[L]Propina legal (10%)[R]$${tip.toFixed(2)}\\n` +
+      `[L]<b>Total</b>[R]<b>$${grand.toFixed(2)}</b>\\n\\n\\n`;
 
     return header + `[C]Pago por cuentas\\n` + splits + accounts + total;
   }
 
-  private buildHtmlInvoice(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null, autoPrint: boolean): string {
-    const splitLines = inv.splits
-      .map((s) => `<tr><td>${this.escapeHtml(s.accountName)}</td><td class="right">$${Number(s.amount).toFixed(2)}</td></tr>`)
+  private buildHtmlInvoice(
+    inv: TableInvoice,
+    business: BusinessInfo | null,
+    clientName: string | null,
+    clientId: string | null,
+    beneficiary: string | null,
+    autoPrint: boolean,
+  ): string {
+    const splitLines = this.splitTotalsWithTip(inv)
+      .map((s) => `<tr><td>${this.escapeHtml(s.accountName)}</td><td class="right">$${Number(s.total).toFixed(2)}</td></tr>`)
+      .join('');
+
+    const businessLines = [
+      business?.name ? `<div class="biz-name">${this.escapeHtml(business.name)}</div>` : '',
+      business?.rnc ? `<div class="biz-line">RNC: ${this.escapeHtml(business.rnc)}</div>` : '',
+      business?.address ? `<div class="biz-line">${this.escapeHtml(business.address)}</div>` : '',
+      business?.phone ? `<div class="biz-line">Tel: ${this.escapeHtml(business.phone)}</div>` : '',
+      business?.email ? `<div class="biz-line">${this.escapeHtml(business.email)}</div>` : '',
+    ]
+      .filter(Boolean)
       .join('');
 
     const accountsHtml = inv.order.accounts
@@ -121,6 +243,10 @@ export class TableInvoicePage {
       })
       .join('');
 
+    const subtotal = this.invoiceSubtotal(inv);
+    const tip = this.invoiceLegalTip(inv);
+    const grand = this.invoiceGrandTotal(inv);
+
     return `
       <html>
         <head>
@@ -131,6 +257,9 @@ export class TableInvoicePage {
             body { font-family: Arial, sans-serif; padding: 16px; }
             h1 { font-size: 18px; margin: 0 0 8px; }
             .meta { color: #555; font-size: 12px; margin-bottom: 10px; }
+            .biz { text-align: center; margin-bottom: 10px; }
+            .biz-name { font-weight: 900; font-size: 16px; margin-bottom: 4px; }
+            .biz-line { font-size: 12px; color: #444; }
             .section { margin: 14px 0; }
             .section-title { font-weight: 700; font-size: 13px; margin: 0 0 6px; }
             .note { color: #666; font-size: 12px; margin-top: 2px; }
@@ -143,6 +272,7 @@ export class TableInvoicePage {
           </style>
         </head>
         <body>
+          ${businessLines ? `<div class="biz">${businessLines}</div><div class="hr"></div>` : ''}
           <h1>${this.tableLabel}</h1>
           <div class="meta">
             Factura: ${this.escapeHtml(inv.id)}<br/>
@@ -157,7 +287,9 @@ export class TableInvoicePage {
           <div class="hr"></div>
           ${accountsHtml}
           <table>
-            <tr><td class="total">Total</td><td class="right total">$${Number(inv.total).toFixed(2)}</td></tr>
+            <tr><td>Subtotal</td><td class="right">$${subtotal.toFixed(2)}</td></tr>
+            <tr><td>Propina legal (10%)</td><td class="right">$${tip.toFixed(2)}</td></tr>
+            <tr><td class="total">Total</td><td class="right total">$${grand.toFixed(2)}</td></tr>
           </table>
           ${autoPrint ? `<script>window.print(); setTimeout(() => window.close(), 250);</script>` : ''}
         </body>
@@ -165,8 +297,8 @@ export class TableInvoicePage {
     `;
   }
 
-  private printViaBrowser(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): void {
-    const html = this.buildHtmlInvoice(inv, clientName, clientId, beneficiary, true);
+  private printViaBrowser(inv: TableInvoice, business: BusinessInfo | null, clientName: string | null, clientId: string | null, beneficiary: string | null): void {
+    const html = this.buildHtmlInvoice(inv, business, clientName, clientId, beneficiary, true);
 
     const w = window.open('', '_blank');
     if (!w) {

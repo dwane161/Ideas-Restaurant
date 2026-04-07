@@ -4,6 +4,7 @@ import express from 'express';
 import { loadEnv } from './env.js';
 import { registerArticulosRoutes } from './routes/articulos.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerBusinessesRoutes } from './routes/businesses.js';
 import { registerClientesRoutes } from './routes/clientes.js';
 import { registerDbRoutes } from './routes/db.js';
 import { registerOrderStatusesRoutes } from './routes/order-statuses.js';
@@ -64,6 +65,7 @@ app.get('/api/health', (_req, res) => {
 const api = express.Router();
 registerDbRoutes(api);
 registerAuthRoutes(api);
+registerBusinessesRoutes(api);
 registerClientesRoutes(api);
 registerOrderStatusesRoutes(api);
 registerOrderItemStatusesRoutes(api);

@@ -13,7 +13,18 @@
       <section class="panel">
         <div class="panel-head">
           <div class="panel-title">Total a pagar</div>
-          <div class="panel-amount">${{ total() | number:'1.2-2' }}</div>
+          <div class="panel-amount">${{ grandTotal() | number:'1.2-2' }}</div>
+        </div>
+
+        <div class="totals">
+          <div class="totals-row">
+            <span class="totals-label">Subtotal</span>
+            <span class="totals-value">${{ total() | number:'1.2-2' }}</span>
+          </div>
+          <div class="totals-row">
+            <span class="totals-label">Propina legal (10%)</span>
+            <span class="totals-value">${{ legalTip() | number:'1.2-2' }}</span>
+          </div>
         </div>
 
         <div class="client-card">
@@ -41,15 +52,15 @@
             <div class="hint">Calculado automáticamente desde los items por cuenta.</div>
 
             <div class="split-grid">
-              <div class="split-row" *ngFor="let a of accountAmounts(); index as i">
+              <div class="split-row" *ngFor="let a of accountTotalsWithTip(); index as i">
                 <div class="split-left">
                   <div class="split-name">{{ a.accountName }}</div>
                   <div class="split-meta">
-                    {{ a.itemCount }} plato(s)
+                    {{ a.itemCount }} plato(s) · ${{ a.amount | number:'1.2-2' }} + ${{ a.tip | number:'1.2-2' }}
                   </div>
                 </div>
                 <div class="split-right">
-                  <span class="calc-amount">${{ a.amount | number:'1.2-2' }}</span>
+                  <span class="calc-amount">${{ a.total | number:'1.2-2' }}</span>
                 </div>
               </div>
             </div>

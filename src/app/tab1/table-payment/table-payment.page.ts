@@ -33,6 +33,7 @@ export class TablePaymentPage {
 
   readonly clientInfo = computed(() => this.tablesService.getClientInfo(this.tableId));
   private beneficiaryPrompted = false;
+  private readonly LEGAL_TIP_RATE = 0.1;
 
   readonly canCobrar = computed<boolean>(() => {
     const order = this.order();
@@ -55,6 +56,13 @@ export class TablePaymentPage {
     );
   });
 
+  readonly legalTip = computed<number>(() => {
+    const subtotal = this.total();
+    return subtotal * this.LEGAL_TIP_RATE;
+  });
+
+  readonly grandTotal = computed<number>(() => this.total() + this.legalTip());
+
   readonly isShared = computed(() => (this.order()?.accounts.length ?? 0) > 1);
 
   readonly accountAmounts = computed(() => {
@@ -69,6 +77,32 @@ export class TablePaymentPage {
         amount,
         itemCount,
       };
+    });
+  });
+
+  readonly accountTotalsWithTip = computed(() => {
+    const accounts = this.accountAmounts();
+    const subtotalCents = Math.round(this.total() * 100);
+    const tipCentsTotal = Math.round(subtotalCents * this.LEGAL_TIP_RATE);
+
+    if (subtotalCents <= 0 || accounts.length === 0) {
+      return accounts.map((a) => ({ ...a, tip: 0, total: a.amount }));
+    }
+
+    const parts = accounts.map((a) => ({
+      ...a,
+      amountCents: Math.round(a.amount * 100),
+    }));
+
+    let usedTip = 0;
+    return parts.map((a, index) => {
+      const isLast = index === parts.length - 1;
+      const shareTip = isLast
+        ? tipCentsTotal - usedTip
+        : Math.floor((tipCentsTotal * a.amountCents) / subtotalCents);
+      usedTip += shareTip;
+      const tip = shareTip / 100;
+      return { accountId: a.accountId, accountName: a.accountName, amount: a.amount, itemCount: a.itemCount, tip, total: a.amount + tip };
     });
   });
 
@@ -188,6 +222,8 @@ export class TablePaymentPage {
     }
 
     const total = this.total();
+    const tip = this.legalTip();
+    const grand = this.grandTotal();
     const splits: PaymentSplit[] =
       order.accounts.length <= 1
         ? [
@@ -205,7 +241,10 @@ export class TablePaymentPage {
 
     const confirm = await this.alertController.create({
       header: 'Cerrar orden',
-      message: `Total: $${total.toFixed(2)}`,
+      message:
+        `Subtotal: $${total.toFixed(2)}<br/>` +
+        `Propina legal (10%): $${tip.toFixed(2)}<br/>` +
+        `<b>Total: $${grand.toFixed(2)}</b>`,
       buttons: [
         { text: 'Cancelar', role: 'cancel' },
         { text: 'Cerrar', role: 'confirm' },
@@ -236,13 +275,15 @@ export class TablePaymentPage {
     }
 
 	    const total = this.total();
+	    const tip = this.legalTip();
+	    const grand = this.grandTotal();
 	    const client = this.clientInfo().client;
 	    const beneficiary = this.clientInfo().beneficiary;
 	
-	    const nativeText = this.buildEscPosPayment(order, total, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
+	    const nativeText = this.buildEscPosPayment(order, total, tip, grand, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
 	    if (isAndroidNative()) {
 	      try {
-	        const html = this.buildHtmlPayment(order, total, client, beneficiary, false);
+	        const html = this.buildHtmlPayment(order, total, tip, grand, client, beneficiary, false);
 	        await printHtml({ name: `${this.tableLabel} - Cobro`, html });
 	        return;
 	      } catch (err: unknown) {
@@ -259,7 +300,7 @@ export class TablePaymentPage {
 	      }
 	    }
 
-	    const html = this.buildHtmlPayment(order, total, client, beneficiary, true);
+	    const html = this.buildHtmlPayment(order, total, tip, grand, client, beneficiary, true);
 
 	    const w = window.open('', '_blank');
 	    if (!w) {
@@ -271,9 +312,36 @@ export class TablePaymentPage {
 	    w.document.close();
 	  }
 
-  private buildHtmlPayment(order: TableOrder, total: number, client: { id: string; name: string } | null, beneficiary: string | null, autoPrint: boolean): string {
-    const accountSections = order.accounts.map((account) => {
-      const amount = account.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+  private buildHtmlPayment(
+    order: TableOrder,
+    subtotal: number,
+    legalTip: number,
+    grandTotal: number,
+    client: { id: string; name: string } | null,
+    beneficiary: string | null,
+    autoPrint: boolean,
+  ): string {
+    const subtotalByAccountId = new Map<string, number>();
+    for (const a of order.accounts ?? []) {
+      subtotalByAccountId.set(a.id, a.items.reduce((s, i) => s + i.qty * i.unitPrice, 0));
+    }
+
+    const subtotalCents = Math.round(subtotal * 100);
+    const tipCentsTotal = Math.round(subtotalCents * this.LEGAL_TIP_RATE);
+
+    const accountTotals = order.accounts.map((a, index) => {
+      const amount = subtotalByAccountId.get(a.id) ?? 0;
+      const amountCents = Math.round(amount * 100);
+      return { account: a, amount, amountCents, index };
+    });
+
+    let usedTip = 0;
+    const accountSections = accountTotals.map(({ account, amount, amountCents, index }) => {
+      const isLast = index === accountTotals.length - 1;
+      const tipCents = subtotalCents <= 0 ? 0 : (isLast ? tipCentsTotal - usedTip : Math.floor((tipCentsTotal * amountCents) / subtotalCents));
+      usedTip += tipCents;
+      const total = amount + tipCents / 100;
+
       const lines = account.items
         .filter((i) => i.qty > 0)
         .map(
@@ -282,7 +350,7 @@ export class TablePaymentPage {
         )
         .join('');
 
-      const title = `${this.escapeHtml(account.name)} — $${amount.toFixed(2)}`;
+      const title = `${this.escapeHtml(account.name)} — $${total.toFixed(2)}`;
 
       return `
         <div class="section">
@@ -322,7 +390,9 @@ export class TablePaymentPage {
           </div>
           ${accountSections.join('')}
           <table>
-            <tr><td class="total">Total</td><td class="right total">$${total.toFixed(2)}</td></tr>
+            <tr><td>Subtotal</td><td class="right">$${subtotal.toFixed(2)}</td></tr>
+            <tr><td>Propina legal (10%)</td><td class="right">$${legalTip.toFixed(2)}</td></tr>
+            <tr><td class="total">Total</td><td class="right total">$${grandTotal.toFixed(2)}</td></tr>
           </table>
           ${autoPrint ? `<script>window.print(); setTimeout(() => window.close(), 250);</script>` : ''}
         </body>
@@ -330,7 +400,7 @@ export class TablePaymentPage {
     `;
   }
 
-  private buildEscPosPayment(order: TableOrder, total: number, clientName: string | null, clientId: string | null, beneficiary: string | null): string {
+  private buildEscPosPayment(order: TableOrder, subtotal: number, legalTip: number, grandTotal: number, clientName: string | null, clientId: string | null, beneficiary: string | null): string {
     const line = '[L]--------------------------------\\n';
     const header =
       `[C]<b>${this.tableLabel}</b>\\n` +
@@ -354,7 +424,10 @@ export class TablePaymentPage {
       })
       .join('');
 
-    const footer = `${line}[L]<b>Total</b>[R]<b>$${total.toFixed(2)}</b>\\n\\n\\n`;
+    const footer =
+      `${line}[L]Subtotal[R]$${subtotal.toFixed(2)}\\n` +
+      `[L]Propina legal (10%)[R]$${legalTip.toFixed(2)}\\n` +
+      `[L]<b>Total</b>[R]<b>$${grandTotal.toFixed(2)}</b>\\n\\n\\n`;
     return header + accounts + footer;
   }
 

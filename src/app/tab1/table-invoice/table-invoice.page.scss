@@ -57,6 +57,10 @@
   color: var(--color-tertiary);
 }
 
+.value.total {
+  color: var(--color-primary);
+}
+
 .divider {
   height: 1px;
   background: rgba(0, 0, 0, 0.08);
@@ -189,4 +193,3 @@
   color: var(--color-text-secondary);
   font-weight: 700;
 }
-

@@ -19,15 +19,25 @@
         </header>
 
         <div class="row">
+          <span class="label">Subtotal</span>
+          <span class="value">${{ invoiceSubtotal(inv) | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="row">
+          <span class="label">Propina legal (10%)</span>
+          <span class="value">${{ invoiceLegalTip(inv) | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="row">
           <span class="label">Total</span>
-          <span class="value">${{ inv.total | number:'1.2-2' }}</span>
+          <span class="value total">${{ invoiceGrandTotal(inv) | number:'1.2-2' }}</span>
         </div>
 
         <div class="divider"></div>
 
         <div class="panel-title small">Pago por cuentas</div>
         <div class="splits">
-          <div *ngFor="let s of inv.splits" class="split-row">
+          <div *ngFor="let s of splitTotalsWithTip(inv)" class="split-row">
             <div class="split-left">
               <div class="split-name">{{ s.accountName }}</div>
               <div *ngIf="inv.method === 'percentage' && s.percent != null" class="split-meta">
@@ -35,7 +45,7 @@
               </div>
             </div>
             <div class="split-amount">
-              ${{ s.amount | number:'1.2-2' }}
+              ${{ s.total | number:'1.2-2' }}
             </div>
           </div>
         </div>
