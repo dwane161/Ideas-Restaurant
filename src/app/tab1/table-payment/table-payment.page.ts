@@ -2,7 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AlertController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
-import { debugUsb, isAndroidNative, printReceipt } from '../../printing/thermal-printer';
+import { isAndroidNative, printHtml } from '../../printing/android-printer';
 import {
   DiningTablesService,
   type PaymentSplit,
@@ -235,25 +235,23 @@ export class TablePaymentPage {
       if (!next.beneficiary) return;
     }
 
-    const total = this.total();
+	    const total = this.total();
 	    const client = this.clientInfo().client;
 	    const beneficiary = this.clientInfo().beneficiary;
 	
 	    const nativeText = this.buildEscPosPayment(order, total, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
 	    if (isAndroidNative()) {
 	      try {
-	        await printReceipt({ text: nativeText, dpi: 203, widthMm: 48, charsPerLine: 32, cut: true });
+	        const html = this.buildHtmlPayment(order, total, client, beneficiary, false);
+	        await printHtml({ name: `${this.tableLabel} - Cobro`, html });
 	        return;
 	      } catch (err: unknown) {
 	        const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
-	        const debug = await debugUsb().catch(() => null);
-	        const debugText = debug ? `\n\nDebug USB:\n${JSON.stringify(debug)}` : '';
 	        const alert = await this.alertController.create({
 	          header: 'No se pudo imprimir',
 	          message:
 	            `${message}\n\n` +
-	            `Si estás usando una tablet con impresora integrada (ej. MJ‑Q75), es posible que requiera el SDK del fabricante y no se detecte como impresora USB (ESC/POS).` +
-	            debugText,
+	            `Esta tableta tiene impresora integrada; si falla, necesitamos el SDK/servicio del fabricante.`,
 	          buttons: ['OK'],
 	        });
 	        await alert.present();
@@ -261,6 +259,19 @@ export class TablePaymentPage {
 	      }
 	    }
 
+	    const html = this.buildHtmlPayment(order, total, client, beneficiary, true);
+
+	    const w = window.open('', '_blank');
+	    if (!w) {
+	      window.print();
+      return;
+    }
+    w.document.open();
+	    w.document.write(html);
+	    w.document.close();
+	  }
+
+  private buildHtmlPayment(order: TableOrder, total: number, client: { id: string; name: string } | null, beneficiary: string | null, autoPrint: boolean): string {
     const accountSections = order.accounts.map((account) => {
       const amount = account.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
       const lines = account.items
@@ -283,7 +294,7 @@ export class TablePaymentPage {
       `;
     });
 
-    const html = `
+    return `
       <html>
         <head>
           <meta charset="utf-8" />
@@ -313,19 +324,10 @@ export class TablePaymentPage {
           <table>
             <tr><td class="total">Total</td><td class="right total">$${total.toFixed(2)}</td></tr>
           </table>
-          <script>window.print(); setTimeout(() => window.close(), 250);</script>
+          ${autoPrint ? `<script>window.print(); setTimeout(() => window.close(), 250);</script>` : ''}
         </body>
       </html>
     `;
-
-    const w = window.open('', '_blank');
-    if (!w) {
-      window.print();
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
   }
 
   private buildEscPosPayment(order: TableOrder, total: number, clientName: string | null, clientId: string | null, beneficiary: string | null): string {

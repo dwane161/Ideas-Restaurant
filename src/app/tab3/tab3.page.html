@@ -151,6 +151,22 @@
     </section>
 
     <section class="card">
+      <div class="card-title">Impresora</div>
+      <div class="row">
+        <div class="label">Tipo</div>
+        <div class="value">Integrada en el dispositivo</div>
+      </div>
+
+      <ion-button expand="block" fill="outline" color="medium" (click)="loadPrinterDiagnostics()">
+        Ver diagnóstico del dispositivo
+      </ion-button>
+
+      <ion-item lines="none" *ngIf="printerDiagnostics() as diag">
+        <ion-textarea [value]="diag" readonly="true" autoGrow="true"></ion-textarea>
+      </ion-item>
+    </section>
+
+    <section class="card">
       <div class="card-title">Clientes</div>
 
       <ion-item lines="none" class="input-row">

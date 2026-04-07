@@ -7,6 +7,7 @@ import { AuthService } from '../auth/auth.service';
 import { DiningTablesService } from '../tab1/dining-tables.service';
 import { ClientesApiService, type ClienteDto } from '../api/clientes-api.service';
 import { SettingsService } from '../settings/settings.service';
+import { getPrinterDiagnostics } from '../printing/printer-diag';
 
 @Component({
   selector: 'app-tab3',
@@ -33,6 +34,8 @@ export class Tab3Page {
   readonly clientQuery = signal<string>('');
   readonly clients = signal<ClienteDto[]>([]);
   readonly isClientsLoading = signal(false);
+
+  readonly printerDiagnostics = signal<string>('');
 
   constructor(
     private readonly auth: AuthService,
@@ -88,6 +91,21 @@ export class Tab3Page {
     }
 
     this.isTesting.set(false);
+  }
+
+  async loadPrinterDiagnostics(): Promise<void> {
+    const data = await getPrinterDiagnostics();
+    if (!data) {
+      const toast = await this.toastController.create({
+        message: 'Diagnóstico solo disponible en Android (APK instalada).',
+        duration: 1600,
+        color: 'warning',
+        position: 'top',
+      });
+      await toast.present();
+      return;
+    }
+    this.printerDiagnostics.set(JSON.stringify(data, null, 2));
   }
 
   setApiBaseUrl(value: unknown): void {

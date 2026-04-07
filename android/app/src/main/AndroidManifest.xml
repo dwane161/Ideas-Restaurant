@@ -34,6 +34,5 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Required to access USB printers via Android USB Host API -->
-    <uses-feature android:name="android.hardware.usb.host" />
+    <!-- myPOS SDK uses explicit broadcasts to the myPOS core app -->
 </manifest>

@@ -1,6 +1,7 @@
 package io.ionic.starter;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
@@ -10,8 +11,14 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
+    // IMPORTANT: Register custom plugins BEFORE calling super.onCreate(),
+    // otherwise Capacitor may not load them into the Bridge.
+    Log.i("PrinterDiag", "Registering PrinterDiagPlugin");
+    registerPlugin(PrinterDiagPlugin.class);
+    Log.i("AndroidPrinter", "Registering AndroidPrinterPlugin");
+    registerPlugin(AndroidPrinterPlugin.class);
+
     super.onCreate(savedInstanceState);
-    registerPlugin(ThermalPrinterPlugin.class);
 
     WebView webView = this.getBridge().getWebView();
     WebSettings settings = webView.getSettings();

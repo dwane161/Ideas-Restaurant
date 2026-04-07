@@ -1,7 +1,7 @@
 import { Component, computed } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DiningTablesService, type OrderItem, type TableInvoice } from '../dining-tables.service';
-import { isAndroidNative, printReceipt } from '../../printing/thermal-printer';
+import { isAndroidNative, printHtml } from '../../printing/android-printer';
 import { AlertController } from '@ionic/angular';
 
 @Component({
@@ -44,14 +44,10 @@ export class TableInvoicePage {
     const client = info.client;
     const beneficiary = info.beneficiary;
 
-    const nativeText = this.buildEscPosInvoice(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
-    void printReceipt({ text: nativeText, dpi: 203, widthMm: 48, charsPerLine: 32, cut: true })
-      .then((printed) => {
-        if (printed) return;
-        this.printViaBrowser(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
-      })
-      .catch(async (err: unknown) => {
-        if (isAndroidNative()) {
+    if (isAndroidNative()) {
+      const html = this.buildHtmlInvoice(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null, false);
+      void printHtml({ name: `${this.tableLabel} - Factura`, html })
+        .catch(async (err: unknown) => {
           const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
           const alert = await this.alertController.create({
             header: 'No se pudo imprimir',
@@ -59,10 +55,11 @@ export class TableInvoicePage {
             buttons: ['OK'],
           });
           await alert.present();
-          return;
-        }
-        this.printViaBrowser(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
-      });
+        });
+      return;
+    }
+
+    this.printViaBrowser(inv, client?.name ?? null, client?.id ?? null, beneficiary ?? null);
   }
 
   private buildEscPosInvoice(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): string {
@@ -97,7 +94,7 @@ export class TableInvoicePage {
     return header + `[C]Pago por cuentas\\n` + splits + accounts + total;
   }
 
-  private printViaBrowser(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): void {
+  private buildHtmlInvoice(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null, autoPrint: boolean): string {
     const splitLines = inv.splits
       .map((s) => `<tr><td>${this.escapeHtml(s.accountName)}</td><td class="right">$${Number(s.amount).toFixed(2)}</td></tr>`)
       .join('');
@@ -124,7 +121,7 @@ export class TableInvoicePage {
       })
       .join('');
 
-    const html = `
+    return `
       <html>
         <head>
           <meta charset="utf-8" />
@@ -162,10 +159,14 @@ export class TableInvoicePage {
           <table>
             <tr><td class="total">Total</td><td class="right total">$${Number(inv.total).toFixed(2)}</td></tr>
           </table>
-          <script>window.print(); setTimeout(() => window.close(), 250);</script>
+          ${autoPrint ? `<script>window.print(); setTimeout(() => window.close(), 250);</script>` : ''}
         </body>
       </html>
     `;
+  }
+
+  private printViaBrowser(inv: TableInvoice, clientName: string | null, clientId: string | null, beneficiary: string | null): void {
+    const html = this.buildHtmlInvoice(inv, clientName, clientId, beneficiary, true);
 
     const w = window.open('', '_blank');
     if (!w) {

@@ -5,9 +5,10 @@ const config: CapacitorConfig = {
   appName: 'Ideas Restaurant',
   webDir: 'www',
   server: {
-    // While the backend is served over HTTP (no SSL yet), use http://localhost in Android WebView
-    // to avoid Mixed Content errors when calling http:// APIs.
-    androidScheme: 'http',
+    // On Android (WebView 117+), custom schemes can break routing/origin.
+    // Keep the local origin as https://localhost and allow calling http:// APIs via mixed-content config in MainActivity.
+    hostname: 'localhost',
+    androidScheme: 'https',
     cleartext: true
   }
 };
