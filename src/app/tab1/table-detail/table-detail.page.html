@@ -166,8 +166,19 @@
                       {{ item.statusLabel || item.statusCode }}
                     </div>
                   </div>
-                  <div class="item-line">
-                    ${{ (item.qty * item.unitPrice) | number:'1.2-2' }}
+                  <div class="item-right">
+                    <button
+                      *ngIf="canCancelItem(item)"
+                      type="button"
+                      class="cancel-btn"
+                      (click)="cancelarItem(account.id, item)"
+                      aria-label="Cancelar plato"
+                    >
+                      <ion-icon name="close-circle"></ion-icon>
+                    </button>
+                    <div class="item-line">
+                      ${{ (item.qty * item.unitPrice) | number:'1.2-2' }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -211,7 +222,7 @@
       <section *ngIf="t.status === 'pending'" class="panel">
         <h2 class="panel-title">Orden pagada</h2>
         <p class="panel-subtitle">
-          Se generó una factura para esta mesa.
+          Se generó una orden para esta mesa.
         </p>
 
         <ng-container *ngIf="invoice() as inv; else noInvoice">
@@ -224,7 +235,7 @@
 
           <div class="actions">
             <button type="button" class="primary-btn" (click)="verFactura()">
-              Ver factura
+              Ver orden
             </button>
             <button type="button" class="ghost-btn" (click)="pasarALimpiando()">
               Pasar a limpiando
@@ -234,7 +245,7 @@
 
         <ng-template #noInvoice>
           <div class="empty-state">
-            No hay factura registrada para esta mesa.
+            No hay orden registrada para esta mesa.
           </div>
         </ng-template>
       </section>

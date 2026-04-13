@@ -713,6 +713,29 @@ export class DiningTablesService {
       .subscribe({ error: () => {} });
   }
 
+  cancelPendingItem(tableId: number, accountId: string, productId: string): void {
+    // Update local first (instant UI).
+    this.ordersByTableId.update((current) => {
+      const existing = current[tableId];
+      if (!existing) return current;
+
+      const accounts = existing.accounts.map((a) => {
+        if (a.id !== accountId) return a;
+        const items = a.items.filter((i) => i.id !== productId);
+        return items === a.items ? a : { ...a, items };
+      });
+
+      return { ...current, [tableId]: { ...existing, accounts } };
+    });
+
+    const remoteOrderId = this.ordersByTableId()[tableId]?.remoteOrderId;
+    if (!remoteOrderId) return;
+
+    this.ordersApi
+      .cancelItem(remoteOrderId, { accountKey: accountId, productId })
+      .subscribe({ error: () => {} });
+  }
+
   private computeOrderTotal(order: TableOrder): number {
     return order.accounts.reduce(
       (sum, a) => sum + a.items.reduce((s, i) => s + i.qty * i.unitPrice, 0),

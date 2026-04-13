@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   DiningTablesService,
   type DiningTable,
+  type OrderItem,
   type PaymentSplit,
   type TableInvoice,
   type TableOrder,
@@ -237,6 +238,29 @@ export class TableDetailPage {
     if (s === 'pending') return 'pending';
     if (s === 'cancelled' || s === 'canceled') return 'cancelled';
     return 'unknown';
+  }
+
+  canCancelItem(item: OrderItem): boolean {
+    const status = String(item.statusCode ?? '').trim().toLowerCase();
+    return status === 'pending' && (item.qty ?? 0) > 0;
+  }
+
+  async cancelarItem(accountId: string, item: OrderItem): Promise<void> {
+    if (!this.canCancelItem(item)) return;
+
+    const confirm = await this.alertController.create({
+      header: 'Cancelar plato',
+      message: `¿Cancelar "${item.name}"?`,
+      buttons: [
+        { text: 'No', role: 'cancel' },
+        { text: 'Sí, cancelar', role: 'confirm' },
+      ],
+    });
+    await confirm.present();
+    const result = await confirm.onDidDismiss();
+    if (result.role !== 'confirm') return;
+
+    this.tablesService.cancelPendingItem(this.tableId, accountId, item.id);
   }
 
   private async promptBeneficiary(): Promise<boolean> {

@@ -43,6 +43,11 @@ const addItemSchema = z.object({
   note: z.string().max(250).optional()
 });
 
+const cancelItemSchema = z.object({
+  accountKey: z.string().min(1),
+  productId: z.string().min(1)
+});
+
 const paySchema = z.object({
   method: z.enum(['percentage', 'amounts']),
   splits: z
@@ -158,6 +163,7 @@ export function registerOrdersRoutes(router: Router) {
         }
 
         for (const item of order.items) {
+          if ((item.qty ?? 0) <= 0) continue;
           const idx = accountIndex.get(item.accountId);
           if (idx === undefined) continue;
           const unitPrice = Number(item.unitPrice);
@@ -395,6 +401,7 @@ export function registerOrdersRoutes(router: Router) {
       }
 
       for (const item of order.items) {
+        if ((item.qty ?? 0) <= 0) continue;
         const idx = accountIndex.get(item.accountId);
         if (idx === undefined) continue;
         const unitPrice = Number(item.unitPrice);
@@ -525,6 +532,63 @@ export function registerOrdersRoutes(router: Router) {
       });
 
       res.status(201).json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/orders/:orderId/items/cancel', async (req, res, next) => {
+    try {
+      const prisma = await getPrisma();
+      const orderId = z.string().uuid().parse(req.params.orderId);
+      const payload = cancelItemSchema.parse(req.body);
+
+      const order = await prisma.appOrder.findUnique({
+        where: { id: orderId },
+        include: { accounts: true }
+      });
+      if (!order) {
+        res.status(404).json({ error: 'Order not found' });
+        return;
+      }
+
+      if (String(order.status ?? '').trim().toLowerCase() !== 'open') {
+        res.status(409).json({ error: 'Order is not open', code: 'ORDER_NOT_OPEN' });
+        return;
+      }
+
+      const account = order.accounts.find((a) => a.key === payload.accountKey);
+      if (!account) {
+        res.status(400).json({ error: `Unknown accountKey: ${payload.accountKey}` });
+        return;
+      }
+
+      const item = await prisma.appOrderItem.findUnique({
+        where: {
+          orderId_accountId_productId: {
+            orderId,
+            accountId: account.id,
+            productId: payload.productId
+          }
+        }
+      });
+      if (!item || (item.qty ?? 0) <= 0) {
+        res.status(404).json({ error: 'Item not found' });
+        return;
+      }
+
+      const status = String(item.itemStatus ?? '').trim().toLowerCase();
+      if (status !== 'pending') {
+        res.status(409).json({ error: 'Only pending items can be cancelled', code: 'ITEM_NOT_PENDING' });
+        return;
+      }
+
+      await prisma.appOrderItem.update({
+        where: { id: item.id },
+        data: { itemStatus: 'cancelled', qty: 0 }
+      });
+
+      res.json({ ok: true });
     } catch (err) {
       next(err);
     }

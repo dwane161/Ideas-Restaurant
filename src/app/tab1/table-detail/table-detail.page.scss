@@ -304,6 +304,31 @@
   gap: 12px;
 }
 
+.item-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cancel-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  background: rgba(220, 38, 38, 0.06);
+  color: rgba(185, 28, 28, 0.92);
+  display: grid;
+  place-items: center;
+}
+
+.cancel-btn:active {
+  transform: scale(0.97);
+}
+
+.cancel-btn ion-icon {
+  font-size: 20px;
+}
+
 .item-name {
   font-weight: 700;
   color: var(--color-tertiary);

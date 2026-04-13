@@ -36,6 +36,11 @@ export interface AddItemRequest {
   note?: string;
 }
 
+export interface CancelItemRequest {
+  accountKey: string;
+  productId: string;
+}
+
 export interface PayRequest {
   method: PaymentMethod;
   splits: { accountKey: string; amount: number; percent?: number }[];
@@ -104,6 +109,10 @@ export class OrdersApiService {
 
   addItem(orderId: string, body: AddItemRequest): Observable<unknown> {
     return this.http.post(`${this.settings.apiBaseUrl()}/orders/${orderId}/items`, body);
+  }
+
+  cancelItem(orderId: string, body: CancelItemRequest): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`${this.settings.apiBaseUrl()}/orders/${orderId}/items/cancel`, body);
   }
 
   pay(orderId: string, body: PayRequest): Observable<unknown> {

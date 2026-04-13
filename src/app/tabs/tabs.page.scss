@@ -1,1 +1,7 @@
+// Some Android devices (esp. older / 3-button navigation) can overlay the system
+// navigation bar on top of the bottom tabs, making them hard to click.
+// Add a small lift so the tab bar stays fully tappable.
+:host-context(.plt-android) ion-tab-bar {
+  margin-bottom: 16px;
+}
 

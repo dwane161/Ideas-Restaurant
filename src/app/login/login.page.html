@@ -44,6 +44,7 @@
 
       <!-- Footer -->
       <div class="pin-footer">
+        <button type="button" class="diag-btn" (click)="openDiag()">Diagnóstico</button>
         <span>¿Olvidó su PIN?</span>
       </div>
 
@@ -52,3 +53,66 @@
   </div>
 
 </ion-content>
+
+<ion-modal [isOpen]="showDiag()" (didDismiss)="closeDiag()" class="diag-modal">
+  <ng-template>
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Diagnóstico</ion-title>
+        <ion-buttons slot="end">
+          <ion-button fill="clear" (click)="closeDiag()">Cerrar</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content>
+      <div class="diag-sheet">
+        <div class="diag-card">
+          <div class="diag-row">
+            <div class="diag-k">API</div>
+            <div class="diag-v">{{ apiBaseUrl }}</div>
+          </div>
+          <div class="diag-row">
+            <div class="diag-k">Plataforma</div>
+            <div class="diag-v">{{ platformLabel }}</div>
+          </div>
+          <div class="diag-actions">
+            <ion-button expand="block" (click)="testConnection()" [disabled]="healthState() === 'loading'">
+              Probar conexión
+            </ion-button>
+            <div class="diag-status" [class.ok]="healthState() === 'ok'" [class.bad]="healthState() === 'error'">
+              {{ healthMessage() || '—' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="diag-head">
+          <div class="diag-title">Log</div>
+          <div class="diag-head-actions">
+            <ion-button size="small" fill="clear" (click)="copyDebugLog()">Copiar</ion-button>
+            <ion-button size="small" fill="clear" (click)="debug.clear()">Limpiar</ion-button>
+          </div>
+        </div>
+
+        <div class="diag-log">
+          @if (debug.entries().length === 0) {
+            <div class="diag-empty">Sin eventos.</div>
+          } @else {
+            @for (e of debug.entries(); track e.tsIso + e.message) {
+              <div class="diag-entry" [class.err]="e.level === 'error'" [class.warn]="e.level === 'warn'">
+                <div class="diag-meta">
+                  <span class="diag-ts">{{ e.tsIso }}</span>
+                  <span class="diag-lvl">{{ e.level }}</span>
+                </div>
+                <div class="diag-msg">{{ e.message }}</div>
+                @if (e.details) {
+                  <pre class="diag-details">{{ formatDetails(e.details) }}</pre>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>

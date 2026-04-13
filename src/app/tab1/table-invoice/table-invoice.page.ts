@@ -144,7 +144,7 @@ export class TableInvoicePage {
     if (isAndroidNative()) {
       const html = this.buildHtmlInvoice(inv, business, clientName, clientId, beneficiary, false);
       try {
-        await printHtml({ name: `${this.tableLabel} - Factura`, html });
+        await printHtml({ name: `${this.tableLabel} - Orden`, html });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err ?? 'No se pudo imprimir.');
         const alert = await this.alertController.create({
@@ -252,7 +252,7 @@ export class TableInvoicePage {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Factura</title>
+          <title>Orden</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 16px; }
             h1 { font-size: 18px; margin: 0 0 8px; }
@@ -275,7 +275,7 @@ export class TableInvoicePage {
           ${businessLines ? `<div class="biz">${businessLines}</div><div class="hr"></div>` : ''}
           <h1>${this.tableLabel}</h1>
           <div class="meta">
-            Factura: ${this.escapeHtml(inv.id)}<br/>
+            Orden: ${this.escapeHtml(inv.id)}<br/>
             ${clientName && clientId ? `Cliente: ${this.escapeHtml(clientName)} (${this.escapeHtml(clientId)})<br/>` : ''}
             ${beneficiary ? `Beneficiario: ${this.escapeHtml(beneficiary)}<br/>` : ''}
             ${new Date(inv.createdAtIso).toLocaleString()}
