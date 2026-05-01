@@ -63,6 +63,15 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
+app.use(
+  '/downloads',
+  express.static('downloads', {
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  })
+);
+
 const api = express.Router();
 registerDbRoutes(api);
 registerAuthRoutes(api);
