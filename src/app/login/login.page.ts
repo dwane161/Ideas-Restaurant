@@ -199,7 +199,9 @@ export class LoginPage implements OnInit {
 
         // Differentiate wrong PIN vs connectivity errors.
         if (status === 401) {
-          this.errorMessage.set('PIN incorrecto');
+          this.errorMessage.set(extractServerMessage(e.error) ?? 'PIN incorrecto');
+        } else if (status === 403 || status === 409 || status === 429) {
+          this.errorMessage.set(extractServerMessage(e.error) ?? 'Acceso no disponible');
         } else if (status === 0 || status === null) {
           this.errorMessage.set('Sin conexión al servidor');
         } else {
@@ -235,4 +237,11 @@ function tryParseJson(value: string): unknown {
   } catch {
     return value;
   }
+}
+
+function extractServerMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const message = (error as { error?: unknown }).error;
+  if (typeof message !== 'string') return null;
+  return message.trim() || null;
 }

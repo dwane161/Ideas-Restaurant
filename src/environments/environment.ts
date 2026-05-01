@@ -4,7 +4,7 @@
 
 export const environment = {
   production: false,
-  apiBaseUrl: 'https://ideasos-001-site11.mtempurl.com/api'
+  apiBaseUrl: 'http://localhost:3001/api'
 };
 
 /*
