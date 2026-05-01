@@ -1,0 +1,186 @@
+name: Publish Android Update
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "Notas que verá el usuario en el aviso de actualización"
+        required: false
+        default: "Nueva versión disponible."
+      required_update:
+        description: "Forzar actualización (true/false)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: publish-android-update
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install app deps
+        run: npm ci
+
+      - name: Resolve Android version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep this above all manually shipped versions. GitHub run_number increases on every run of this workflow.
+          VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "ANDROID_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Decode Android keystore
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_KEYSTORE_BASE64}"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build signed release APK
+        working-directory: android
+        run: ./gradlew :app:assembleRelease
+        env:
+          ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          ANDROID_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          ANDROID_KEYSTORE_PATH: keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Collect version and APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_CODE="${ANDROID_VERSION_CODE}"
+          VERSION_NAME="${ANDROID_VERSION_NAME}"
+          APK_PATH="$(ls -1 android/app/build/outputs/apk/release/*.apk | head -n 1)"
+          APK_NAME="ideas-restaurant-${VERSION_NAME}-${VERSION_CODE}.apk"
+          mkdir -p apk_upload
+          cp "$APK_PATH" "apk_upload/$APK_NAME"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
+          echo "apk_path=apk_upload/$APK_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-update-apk
+          path: ${{ steps.apk.outputs.apk_path }}
+          if-no-files-found: error
+
+      - name: Upload APK to HostBuddy FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.APK_FTP_SERVER_DIR }}
+          local-dir: apk_upload/
+
+      - name: Install backend deps for DB update
+        working-directory: backend
+        run: npm ci
+
+      - name: Update Android version settings in SQL
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.APP_DATABASE_URL }}
+          VERSION_CODE: ${{ steps.apk.outputs.version_code }}
+          VERSION_NAME: ${{ steps.apk.outputs.version_name }}
+          APK_URL: ${{ secrets.APK_PUBLIC_BASE_URL }}/${{ steps.apk.outputs.apk_name }}
+          RELEASE_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.release_notes || format('Actualización automática del commit {0}.', github.sha) }}
+          REQUIRED_UPDATE: ${{ github.event_name == 'workflow_dispatch' && inputs.required_update || 'false' }}
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL}"
+          test -n "${APK_URL}"
+          node --input-type=module <<'NODE'
+          import { PrismaClient } from '@prisma/client';
+
+          const prisma = new PrismaClient();
+          const values = new Map([
+            ['app.android.enabled', 'true'],
+            ['app.android.latestVersionCode', process.env.VERSION_CODE ?? ''],
+            ['app.android.latestVersionName', process.env.VERSION_NAME ?? ''],
+            ['app.android.apkUrl', process.env.APK_URL ?? ''],
+            ['app.android.releaseNotes', process.env.RELEASE_NOTES ?? 'Nueva versión disponible.'],
+            ['app.android.required', String(process.env.REQUIRED_UPDATE ?? 'false').toLowerCase() === 'true' ? 'true' : 'false'],
+          ]);
+
+          async function upsertSetting(key, value) {
+            await prisma.$executeRawUnsafe(`
+              IF OBJECT_ID(N'dbo.App_Settings', N'U') IS NULL
+              BEGIN
+                CREATE TABLE dbo.App_Settings (
+                  SettingKey NVARCHAR(100) NOT NULL CONSTRAINT PK_App_Settings PRIMARY KEY,
+                  SettingValue NVARCHAR(MAX) NULL,
+                  CreatedAt DATETIME NOT NULL CONSTRAINT DF_App_Settings_CreatedAt DEFAULT (GETDATE()),
+                  UpdatedAt DATETIME NOT NULL CONSTRAINT DF_App_Settings_UpdatedAt DEFAULT (GETDATE())
+                );
+              END
+            `);
+            await prisma.$executeRaw`
+              UPDATE dbo.App_Settings
+              SET SettingValue = ${value}, UpdatedAt = GETDATE()
+              WHERE SettingKey = ${key};
+
+              IF @@ROWCOUNT = 0
+              BEGIN
+                INSERT INTO dbo.App_Settings (SettingKey, SettingValue)
+                VALUES (${key}, ${value});
+              END
+            `;
+          }
+
+          try {
+            for (const [key, value] of values) {
+              await upsertSetting(key, value);
+            }
+          } finally {
+            await prisma.$disconnect();
+          }
+          NODE
+
+      - name: Summary
+        run: |
+          echo "Published Android APK:"
+          echo "Version: ${{ steps.apk.outputs.version_name }} (${{ steps.apk.outputs.version_code }})"
+          echo "URL: ${{ secrets.APK_PUBLIC_BASE_URL }}/${{ steps.apk.outputs.apk_name }}"

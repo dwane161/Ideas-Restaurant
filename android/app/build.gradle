@@ -4,6 +4,8 @@ def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
 def keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 def keyAliasEnv = System.getenv("ANDROID_KEY_ALIAS")
 def keyPasswordEnv = System.getenv("ANDROID_KEY_PASSWORD")
+def appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "3") as Integer
+def appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0.2"
 
 android {
     namespace = "io.ionic.starter"
@@ -12,8 +14,8 @@ android {
         applicationId "io.ionic.starter"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.0.2"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

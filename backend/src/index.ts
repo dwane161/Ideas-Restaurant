@@ -2,6 +2,7 @@ import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import { loadEnv } from './env.js';
+import { registerAppUpdateRoutes } from './routes/app-update.js';
 import { registerArticulosRoutes } from './routes/articulos.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerBusinessesRoutes } from './routes/businesses.js';
@@ -65,6 +66,7 @@ app.get('/api/health', (_req, res) => {
 const api = express.Router();
 registerDbRoutes(api);
 registerAuthRoutes(api);
+registerAppUpdateRoutes(api);
 registerBusinessesRoutes(api);
 registerClientesRoutes(api);
 registerOrderStatusesRoutes(api);
