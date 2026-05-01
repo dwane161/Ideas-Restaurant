@@ -8,6 +8,7 @@ import { SettingsService } from '../settings/settings.service';
 import { DebugLogService } from '../debug/debug-log.service';
 import { isAndroidNative } from '../printing/android-printer';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { AppUpdateService } from '../update/app-update.service';
 
 @Component({
   selector: 'app-login',
@@ -67,6 +68,7 @@ export class LoginPage implements OnInit {
     private readonly auth: AuthService,
     private readonly http: HttpClient,
     private readonly settings: SettingsService,
+    readonly appUpdate: AppUpdateService,
     readonly debug: DebugLogService,
   ) {}
 
@@ -146,6 +148,22 @@ export class LoginPage implements OnInit {
       });
       await toast.present();
     }
+  }
+
+  async handleUpdateButton(): Promise<void> {
+    if (this.appUpdate.updateAvailable()) {
+      this.appUpdate.openAvailableUpdate();
+      return;
+    }
+
+    await this.appUpdate.checkForUpdates('login-button');
+    const toast = await this.toastController.create({
+      message: this.appUpdate.updateAvailable() ? 'Actualización disponible' : 'La app está actualizada',
+      duration: 1200,
+      color: this.appUpdate.updateAvailable() ? 'warning' : 'medium',
+      position: 'top',
+    });
+    await toast.present();
   }
 
   formatDetails(details: unknown): string {

@@ -42,6 +42,22 @@
         Ingresar
       </ion-button>
 
+      @if (appUpdate.isAndroid()) {
+        <button
+          type="button"
+          class="version-btn"
+          [class.has-update]="appUpdate.updateAvailable()"
+          (click)="handleUpdateButton()"
+        >
+          <span>Versión {{ appUpdate.currentVersionName() || appUpdate.currentVersionCode() || '—' }}</span>
+          @if (appUpdate.updateAvailable()) {
+            <strong>Actualizar a {{ appUpdate.latestVersionName() || appUpdate.latestVersionCode() }}</strong>
+          } @else {
+            <strong>Buscar actualización</strong>
+          }
+        </button>
+      }
+
       <!-- Footer -->
       <div class="pin-footer">
         <button type="button" class="diag-btn" (click)="openDiag()">Diagnóstico</button>

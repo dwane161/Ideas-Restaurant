@@ -486,13 +486,11 @@ export function registerOrdersRoutes(router: Router) {
         return;
       }
 
-      const existing = await prisma.appOrderItem.findUnique({
+      const existing = await prisma.appOrderItem.findFirst({
         where: {
-          orderId_accountId_productId: {
-            orderId,
-            accountId: account.id,
-            productId: payload.productId
-          }
+          orderId,
+          accountId: account.id,
+          productId: payload.productId
         }
       });
 
@@ -505,31 +503,28 @@ export function registerOrdersRoutes(router: Router) {
         return;
       }
 
-      const item = await prisma.appOrderItem.upsert({
-        where: {
-          orderId_accountId_productId: {
-            orderId,
-            accountId: account.id,
-            productId: payload.productId
-          }
-        },
-        create: {
-          orderId,
-          accountId: account.id,
-          productId: payload.productId,
-          productName: payload.productName,
-          unitPrice: payload.unitPrice,
-          qty: nextQty,
-          note: payload.note ?? null,
-          itemStatus: 'pending'
-        },
-        update: {
-          productName: payload.productName,
-          unitPrice: payload.unitPrice,
-          qty: nextQty,
-          note: payload.note ?? undefined
-        }
-      });
+      const item = existing
+        ? await prisma.appOrderItem.update({
+            where: { id: existing.id },
+            data: {
+              productName: payload.productName,
+              unitPrice: payload.unitPrice,
+              qty: nextQty,
+              note: payload.note ?? undefined
+            }
+          })
+        : await prisma.appOrderItem.create({
+            data: {
+              orderId,
+              accountId: account.id,
+              productId: payload.productId,
+              productName: payload.productName,
+              unitPrice: payload.unitPrice,
+              qty: nextQty,
+              note: payload.note ?? null,
+              itemStatus: 'pending'
+            }
+          });
 
       res.status(201).json({ item });
     } catch (err) {
@@ -563,13 +558,11 @@ export function registerOrdersRoutes(router: Router) {
         return;
       }
 
-      const item = await prisma.appOrderItem.findUnique({
+      const item = await prisma.appOrderItem.findFirst({
         where: {
-          orderId_accountId_productId: {
-            orderId,
-            accountId: account.id,
-            productId: payload.productId
-          }
+          orderId,
+          accountId: account.id,
+          productId: payload.productId
         }
       });
       if (!item || (item.qty ?? 0) <= 0) {

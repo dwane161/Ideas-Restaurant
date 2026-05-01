@@ -1,6 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { AlertController } from '@ionic/angular';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { firstValueFrom } from 'rxjs';
@@ -19,20 +18,28 @@ interface AndroidUpdateResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AppUpdateService {
+  private readonly update = signal<AndroidUpdateResponse | null>(null);
   private isChecking = false;
-  private isPromptOpen = false;
-  private promptedVersionCode = 0;
   private resumeListenerReady = false;
+
+  readonly isAndroid = signal(Capacitor.getPlatform() === 'android');
+  readonly currentVersionCode = signal(0);
+  readonly currentVersionName = signal('');
+  readonly updateAvailable = computed(() => Boolean(this.update()?.enabled && this.update()?.updateAvailable && this.update()?.downloadUrl));
+  readonly latestVersionCode = computed(() => this.update()?.latestVersionCode ?? 0);
+  readonly latestVersionName = computed(() => this.update()?.latestVersionName ?? '');
+  readonly releaseNotes = computed(() => this.update()?.releaseNotes ?? '');
+  readonly required = computed(() => Boolean(this.update()?.required));
 
   constructor(
     private readonly http: HttpClient,
-    private readonly alertController: AlertController,
     private readonly settings: SettingsService,
     private readonly debug: DebugLogService,
   ) {}
 
   start(): void {
     this.installResumeListener();
+    void this.loadCurrentVersion();
     setTimeout(() => void this.checkForUpdates('startup'), 1500);
   }
 
@@ -41,15 +48,14 @@ export class AppUpdateService {
     this.isChecking = true;
 
     try {
-      const info = await App.getInfo();
-      const currentVersionCode = toVersionCode(info.build);
+      const { currentVersionCode, currentVersionName } = await this.loadCurrentVersion();
       if (currentVersionCode <= 0) return;
 
       const update = await firstValueFrom(
         this.http.get<AndroidUpdateResponse>(`${this.settings.apiBaseUrl()}/app-update/android`, {
           params: {
             currentVersionCode: String(currentVersionCode),
-            currentVersionName: info.version ?? '',
+            currentVersionName,
           },
         }),
       );
@@ -57,17 +63,13 @@ export class AppUpdateService {
       this.debug.info('Android update check', {
         reason,
         currentVersionCode,
-        currentVersionName: info.version ?? '',
+        currentVersionName,
         latestVersionCode: update.latestVersionCode,
         updateAvailable: update.updateAvailable,
         required: update.required,
       });
 
-      if (!update.enabled || !update.updateAvailable || !update.downloadUrl) return;
-      if (!update.required && this.promptedVersionCode === update.latestVersionCode) return;
-
-      this.promptedVersionCode = update.latestVersionCode;
-      await this.showUpdatePrompt(update);
+      this.update.set(update);
     } catch (err) {
       const e = err as { status?: number; message?: string; error?: unknown };
       this.debug.warn('Android update check failed', {
@@ -92,45 +94,24 @@ export class AppUpdateService {
     });
   }
 
-  private async showUpdatePrompt(update: AndroidUpdateResponse): Promise<void> {
-    if (this.isPromptOpen) return;
-    this.isPromptOpen = true;
+  private async loadCurrentVersion(): Promise<{ currentVersionCode: number; currentVersionName: string }> {
+    if (Capacitor.getPlatform() !== 'android') {
+      return { currentVersionCode: 0, currentVersionName: '' };
+    }
 
-    const versionLabel = update.latestVersionName || String(update.latestVersionCode);
-    const message = [
-      `Hay una nueva versión disponible (${versionLabel}).`,
-      update.releaseNotes ? `\n${update.releaseNotes}` : '',
-    ].join('');
+    const info = await App.getInfo();
+    const currentVersionCode = toVersionCode(info.build);
+    const currentVersionName = info.version ?? '';
+    this.currentVersionCode.set(currentVersionCode);
+    this.currentVersionName.set(currentVersionName);
+    return { currentVersionCode, currentVersionName };
+  }
 
-    const alert = await this.alertController.create({
-      header: update.required ? 'Actualización requerida' : 'Actualización disponible',
-      message,
-      backdropDismiss: !update.required,
-      buttons: [
-        ...(update.required
-          ? []
-          : [
-              {
-                text: 'Luego',
-                role: 'cancel',
-              },
-            ]),
-        {
-          text: 'Actualizar',
-          handler: () => {
-            this.openDownload(update.downloadUrl);
-            return !update.required;
-          },
-        },
-      ],
-    });
-
-    alert.onDidDismiss().then(() => {
-      this.isPromptOpen = false;
-      if (update.required) setTimeout(() => void this.showUpdatePrompt(update), 3000);
-    });
-
-    await alert.present();
+  openAvailableUpdate(): boolean {
+    const url = this.update()?.downloadUrl ?? '';
+    if (!this.updateAvailable() || !url) return false;
+    this.openDownload(url);
+    return true;
   }
 
   private openDownload(url: string): void {
