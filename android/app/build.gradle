@@ -32,11 +32,11 @@ android {
                 keyAlias keyAliasEnv
                 keyPassword keyPasswordEnv
                 // Some older/locked-down Android builds still require v1/v2 signatures to install.
-                v1SigningEnabled true
-                v2SigningEnabled true
-                v3SigningEnabled true
+                v1SigningEnabled = true
+                v2SigningEnabled = true
+                enableV3Signing = true
                 // v4 is optional and not required for installation.
-                v4SigningEnabled false
+                enableV4Signing = false
             }
         }
     } else {
