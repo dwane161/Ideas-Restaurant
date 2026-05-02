@@ -17,6 +17,8 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(PrinterDiagPlugin.class);
     Log.i("AndroidPrinter", "Registering AndroidPrinterPlugin");
     registerPlugin(AndroidPrinterPlugin.class);
+    Log.i("AppUpdater", "Registering AppUpdaterPlugin");
+    registerPlugin(AppUpdaterPlugin.class);
 
     super.onCreate(savedInstanceState);
 

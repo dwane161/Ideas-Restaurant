@@ -164,10 +164,19 @@
   padding: 8px 12px;
   font-size: 12px;
   line-height: 1.2;
+  position: relative;
+  overflow: hidden;
 
   strong {
     color: var(--color-tertiary);
     font-size: 13px;
+    position: relative;
+    z-index: 1;
+  }
+
+  span {
+    position: relative;
+    z-index: 1;
   }
 }
 
@@ -178,6 +187,16 @@
   strong {
     color: #9a3412;
   }
+}
+
+.version-progress {
+  position: absolute;
+  inset: auto 0 0;
+  width: var(--progress, 0%);
+  height: 3px;
+  background: #ea580c;
+  transition: width 0.18s ease;
+  z-index: 0;
 }
 
 /* footer */

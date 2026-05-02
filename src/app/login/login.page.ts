@@ -152,7 +152,14 @@ export class LoginPage implements OnInit {
 
   async handleUpdateButton(): Promise<void> {
     if (this.appUpdate.updateAvailable()) {
-      this.appUpdate.openAvailableUpdate();
+      const result = await this.appUpdate.downloadAvailableUpdate();
+      const toast = await this.toastController.create({
+        message: result.message ?? (result.ok ? 'Actualización descargada' : 'No se pudo actualizar'),
+        duration: result.ok ? 1800 : 2800,
+        color: result.ok ? 'success' : 'warning',
+        position: 'top',
+      });
+      await toast.present();
       return;
     }
 
