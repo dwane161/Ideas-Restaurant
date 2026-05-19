@@ -5,7 +5,7 @@ import {
   type AccountOrder,
   type DiningTable,
   type TableOrder,
-} from '../tab1/dining-tables.service';
+} from '../tables/dining-tables.service';
 import {
   ArticulosApiService,
   type AuxCArticuloDto,
@@ -33,12 +33,12 @@ interface MenuDish {
 }
 
 @Component({
-  selector: 'app-tab2',
-  templateUrl: 'tab2.page.html',
-  styleUrls: ['tab2.page.scss'],
+  selector: 'app-menu',
+  templateUrl: 'menu.page.html',
+  styleUrls: ['menu.page.scss'],
   standalone: false,
 })
-export class Tab2Page {
+export class MenuPage {
   private readonly fallbackImageUrl = 'assets/dish-placeholder.svg';
   private readonly brokenImageDishIds = new Set<string>();
 

@@ -257,7 +257,7 @@ export class TablePaymentPage {
     const invoice = this.tablesService.payOrder(this.tableId, 'amounts', splits);
     if (!invoice) return;
 
-    this.router.navigate([`/tabs/tab1/mesa/${this.tableId}/factura`]);
+    this.router.navigate([`/tabs/tables/mesa/${this.tableId}/factura`]);
   }
 
   async imprimirCobro(): Promise<void> {

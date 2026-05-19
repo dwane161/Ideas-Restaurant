@@ -20,7 +20,7 @@ import { AppUpdateService } from '../update/app-update.service';
 export class LoginPage implements OnInit {
   ngOnInit(): void {
     if (this.auth.user()) {
-      void this.router.navigate(['/tabs/tab1'], { replaceUrl: true });
+      void this.router.navigate(['/tabs/tables'], { replaceUrl: true });
     }
   }
 
@@ -215,7 +215,7 @@ export class LoginPage implements OnInit {
       next: async () => {
         this.pin.set([]);
         this.errorMessage.set('');
-        await this.router.navigate(['/tabs/tab1'], { replaceUrl: true });
+        await this.router.navigate(['/tabs/tables'], { replaceUrl: true });
       },
       error: async (err: unknown) => {
         this.pin.set([]);

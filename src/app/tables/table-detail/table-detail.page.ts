@@ -64,7 +64,7 @@ export class TableDetailPage {
   }
 
   goBack(): void {
-    this.router.navigate(['/tabs/tab1']);
+    this.router.navigate(['/tabs/tables']);
   }
 
   async openTable(): Promise<void> {
@@ -141,7 +141,7 @@ export class TableDetailPage {
     if (result.role !== 'confirm') return;
 
     if (order.accounts.length > 1) {
-      this.router.navigate([`/tabs/tab1/mesa/${this.tableId}/pago`]);
+      this.router.navigate([`/tabs/tables/mesa/${this.tableId}/pago`]);
       return;
     }
 
@@ -153,12 +153,12 @@ export class TableDetailPage {
     const invoice = this.tablesService.payOrder(this.tableId, 'amounts', splits);
     if (!invoice) return;
 
-    this.router.navigate([`/tabs/tab1/mesa/${this.tableId}/factura`]);
+    this.router.navigate([`/tabs/tables/mesa/${this.tableId}/factura`]);
   }
 
   irAMenu(): void {
     this.tablesService.selectTable(this.tableId);
-    this.router.navigate(['/tabs/tab2']);
+    this.router.navigate(['/tabs/menu']);
   }
 
   async elegirCliente(): Promise<void> {
@@ -292,7 +292,7 @@ export class TableDetailPage {
   }
 
   verFactura(): void {
-    this.router.navigate([`/tabs/tab1/mesa/${this.tableId}/factura`]);
+    this.router.navigate([`/tabs/tables/mesa/${this.tableId}/factura`]);
   }
 
   pasarALimpiando(): void {
@@ -301,7 +301,7 @@ export class TableDetailPage {
 
   marcarDisponible(): void {
     this.tablesService.setAvailable(this.tableId);
-    this.router.navigate(['/tabs/tab1']);
+    this.router.navigate(['/tabs/tables']);
   }
 
   setBillingMode(value: unknown): void {

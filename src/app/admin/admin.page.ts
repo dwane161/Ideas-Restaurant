@@ -4,18 +4,18 @@ import { Router } from '@angular/router';
 import { AlertController, ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { DiningTablesService } from '../tab1/dining-tables.service';
+import { DiningTablesService } from '../tables/dining-tables.service';
 import { ClientesApiService, type ClienteDto } from '../api/clientes-api.service';
 import { SettingsService } from '../settings/settings.service';
 import { getPrinterDiagnostics } from '../printing/printer-diag';
 
 @Component({
-  selector: 'app-tab3',
-  templateUrl: 'tab3.page.html',
-  styleUrls: ['tab3.page.scss'],
+  selector: 'app-admin',
+  templateUrl: 'admin.page.html',
+  styleUrls: ['admin.page.scss'],
   standalone: false,
 })
-export class Tab3Page {
+export class AdminPage {
   readonly settings = this.settingsService.settings;
   readonly user = this.auth.user;
   readonly isRemoteLoading = this.settingsService.isRemoteLoading;

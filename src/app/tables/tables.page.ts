@@ -4,12 +4,12 @@ import { DiningTablesService, type TableStatus } from './dining-tables.service';
 import { AuthService } from '../auth/auth.service';
 
 @Component({
-  selector: 'app-tab1',
-  templateUrl: 'tab1.page.html',
-  styleUrls: ['tab1.page.scss'],
+  selector: 'app-tables',
+  templateUrl: 'tables.page.html',
+  styleUrls: ['tables.page.scss'],
   standalone: false,
 })
-export class Tab1Page {
+export class TablesPage {
 
   readonly tables = this.tablesService.tables;
   readonly availableCount = this.tablesService.availableCount;
@@ -64,7 +64,7 @@ export class Tab1Page {
 
   openTableDetail(tableId: number): void {
     this.tablesService.selectTable(tableId);
-    this.router.navigate(['/tabs/tab1/mesa', tableId]);
+    this.router.navigate(['/tabs/tables/mesa', tableId]);
   }
 
   getStatusLabel(status: TableStatus): string {

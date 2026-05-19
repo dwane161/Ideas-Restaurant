@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { Tab1Page } from './tab1.page';
+import { TablesPage } from './tables.page';
 import { TableDetailPage } from './table-detail/table-detail.page';
 import { TableInvoicePage } from './table-invoice/table-invoice.page';
 import { TablePaymentPage } from './table-payment/table-payment.page';
@@ -8,7 +8,7 @@ import { TablePaymentPage } from './table-payment/table-payment.page';
 const routes: Routes = [
   {
     path: '',
-    component: Tab1Page,
+    component: TablesPage,
   }
   ,
   {
@@ -29,4 +29,4 @@ const routes: Routes = [
   imports: [RouterModule.forChild(routes)],
   exports: [RouterModule]
 })
-export class Tab1PageRoutingModule {}
+export class TablesPageRoutingModule {}
